@@ -3,9 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
-    <title>Onda</title>
+    <title>&#8288;</title>
     <link id="onda-favicon" rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" />
     <link id="onda-apple-icon" rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" />
+    <script>
+      try {
+        document.title = '\u2060';
+        var savedFav = localStorage.getItem('onda_favicon_o_v1');
+        if (savedFav) {
+          var favEl = document.getElementById('onda-favicon');
+          if (favEl) favEl.setAttribute('href', savedFav);
+        }
+      } catch (e) {}
+    </script>
     <meta name="description" content="Organizador pessoal minimalista com sincronização em nuvem." />
     <meta property="og:title" content="Onda" />
     <meta property="og:description" content="Organizador pessoal minimalista com sincronização em nuvem." />

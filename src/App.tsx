@@ -169,6 +169,11 @@ function applyOndaFaviconFromTransparentUrl(transparentUrl: string) {
       ctx.drawImage(tempCanvas, sx, sy, cropW, cropH, drawX, drawY, drawW, drawH);
       const squarePng = canvas.toDataURL('image/png');
       cachedSquareFavicon = squarePng;
+      try {
+        localStorage.setItem('onda_favicon_o_v1', squarePng);
+      } catch {
+        // ignora quota de localStorage
+      }
 
       let link = document.querySelector<HTMLLinkElement>("link[rel*='icon']");
       if (!link) {
