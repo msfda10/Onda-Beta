@@ -122,6 +122,37 @@ function applyOndaFaviconFromTransparentUrl(transparentUrl: string) {
   img.crossOrigin = 'anonymous';
   img.onload = () => {
     try {
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = img.width;
+      tempCanvas.height = img.height;
+      const tempCtx = tempCanvas.getContext('2d');
+      if (!tempCtx) return;
+
+      tempCtx.drawImage(img, 0, 0);
+      const { data, width, height } = tempCtx.getImageData(0, 0, img.width, img.height);
+      let minX = width;
+      let minY = height;
+      let maxX = 0;
+      let maxY = 0;
+
+      // Recorta 100% das bordas transparentes e sombras suaves para ocupar o limite máximo do ícone
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const alpha = data[(y * width + x) * 4 + 3];
+          if (alpha > 95) {
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+
+      const cropW = maxX > minX ? maxX - minX + 1 : width;
+      const cropH = maxY > minY ? maxY - minY + 1 : height;
+      const sx = maxX > minX ? minX : 0;
+      const sy = maxY > minY ? minY : 0;
+
       const size = 128;
       const canvas = document.createElement('canvas');
       canvas.width = size;
@@ -129,13 +160,13 @@ function applyOndaFaviconFromTransparentUrl(transparentUrl: string) {
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      const scale = Math.min((size * 0.98) / img.width, (size * 0.98) / img.height);
-      const drawW = img.width * scale;
-      const drawH = img.height * scale;
+      const scale = Math.min(size / cropW, size / cropH);
+      const drawW = cropW * scale;
+      const drawH = cropH * scale;
       const drawX = (size - drawW) / 2;
       const drawY = (size - drawH) / 2;
 
-      ctx.drawImage(img, drawX, drawY, drawW, drawH);
+      ctx.drawImage(tempCanvas, sx, sy, cropW, cropH, drawX, drawY, drawW, drawH);
       const squarePng = canvas.toDataURL('image/png');
       cachedSquareFavicon = squarePng;
 
