@@ -316,14 +316,21 @@ function OndaLogo3D({ className = 'h-9 sm:h-10 w-auto' }: { className?: string }
   useEffect(() => {
     if (cachedTransparentFullLogo) {
       setLogoUrl(cachedTransparentFullLogo);
-      applyOndaFaviconFromTransparentUrl(cachedTransparentFullLogo);
-      return;
+    } else {
+      processBlackBgImage(ondaFullLogoSrc, 640, 320, (url) => {
+        cachedTransparentFullLogo = url;
+        setLogoUrl(url);
+      });
     }
-    processBlackBgImage(ondaFullLogoSrc, 640, 320, (url) => {
-      cachedTransparentFullLogo = url;
-      setLogoUrl(url);
-      applyOndaFaviconFromTransparentUrl(url);
-    });
+
+    if (cachedTransparentWaveO) {
+      applyOndaFaviconFromTransparentUrl(cachedTransparentWaveO);
+    } else {
+      processBlackBgImage(ondaWaveOLogoSrc, 384, 384, (url) => {
+        cachedTransparentWaveO = url;
+        applyOndaFaviconFromTransparentUrl(url);
+      });
+    }
   }, []);
 
   if (!logoUrl) {
@@ -347,11 +354,13 @@ function OndaWaveOIcon({ className = 'h-9 sm:h-10 w-auto' }: { className?: strin
   useEffect(() => {
     if (cachedTransparentWaveO) {
       setIconUrl(cachedTransparentWaveO);
+      applyOndaFaviconFromTransparentUrl(cachedTransparentWaveO);
       return;
     }
     processBlackBgImage(ondaWaveOLogoSrc, 384, 384, (url) => {
       cachedTransparentWaveO = url;
       setIconUrl(url);
+      applyOndaFaviconFromTransparentUrl(url);
     });
   }, []);
 
