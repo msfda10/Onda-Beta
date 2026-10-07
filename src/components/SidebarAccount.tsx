@@ -46,7 +46,7 @@ export function SidebarAccount({
           whileHover={{ scale: 1.06 }}
           whileTap={{ scale: 0.94 }}
           title={isDark ? 'Mudar para Tema Claro' : 'Mudar para Tema Escuro'}
-          className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/45 dark:bg-white/[0.12] hover:bg-white/75 dark:hover:bg-white/[0.22] border border-white/80 dark:border-white/30 text-slate-900 dark:text-white flex items-center justify-center cursor-pointer transition-all shadow-[0_6px_18px_rgba(0,0,0,0.08)] hover:shadow-[0_0_16px_rgba(255,255,255,0.65)]"
+          className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/24 dark:bg-white/[0.10] hover:bg-white/45 dark:hover:bg-white/[0.20] backdrop-blur-xl border border-white/65 dark:border-white/28 text-slate-900 dark:text-white flex items-center justify-center cursor-pointer transition-all shadow-[0_6px_18px_rgba(0,0,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.65)] hover:shadow-[0_0_16px_rgba(255,255,255,0.55)]"
         >
           {isDark ? (
             <Sun className="w-4 h-4 text-amber-200" />
@@ -63,7 +63,7 @@ export function SidebarAccount({
           whileHover={{ scale: 1.06 }}
           whileTap={{ scale: 0.94 }}
           title="Configurações"
-          className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/45 dark:bg-white/[0.12] hover:bg-white/75 dark:hover:bg-white/[0.22] border border-white/80 dark:border-white/30 text-slate-900 dark:text-white flex items-center justify-center cursor-pointer transition-all shadow-[0_6px_18px_rgba(0,0,0,0.08)] hover:shadow-[0_0_16px_rgba(255,255,255,0.65)]"
+          className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white/24 dark:bg-white/[0.10] hover:bg-white/45 dark:hover:bg-white/[0.20] backdrop-blur-xl border border-white/65 dark:border-white/28 text-slate-900 dark:text-white flex items-center justify-center cursor-pointer transition-all shadow-[0_6px_18px_rgba(0,0,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.65)] hover:shadow-[0_0_16px_rgba(255,255,255,0.55)]"
         >
           <Sliders className="w-4 h-4" />
         </motion.button>

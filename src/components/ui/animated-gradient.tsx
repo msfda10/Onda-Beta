@@ -180,7 +180,7 @@ export default function AnimatedGradient({
   const frameIdRef = useRef<number | undefined>(undefined);
   const startTimeRef = useRef<number>(performance.now());
 
-  // Estado ULTRA SUAVE: inércia líquida contínua que nunca dá tranco nem volta seca quando o mouse para
+  // Estado de fluxo orgânico e aleatório (acumula movimento sem nunca voltar para um padrão fixo/estático)
   const pointerFlowRef = useRef<{
     rawX: number;
     rawY: number;
@@ -190,15 +190,21 @@ export default function AnimatedGradient({
     driftOffsetY: number;
     velX: number;
     velY: number;
+    randomSeedX: number;
+    randomSeedY: number;
+    swirlPhase: number;
   }>({
     rawX: 0.5,
     rawY: 0.5,
     smoothX: 0.5,
     smoothY: 0.5,
-    driftOffsetX: 0,
-    driftOffsetY: 0,
+    driftOffsetX: Math.random() * 10,
+    driftOffsetY: Math.random() * 10,
     velX: 0,
     velY: 0,
+    randomSeedX: Math.random() * 100,
+    randomSeedY: Math.random() * 100,
+    swirlPhase: Math.random() * 20,
   });
 
   const [isMounted, setIsMounted] = useState(false);
@@ -314,6 +320,7 @@ export default function AnimatedGradient({
       u_swirlIterations: gl.getUniformLocation(program, "u_swirlIterations"),
       u_mousePos: gl.getUniformLocation(program, "u_mousePos"),
       u_flowDrift: gl.getUniformLocation(program, "u_flowDrift"),
+      u_mouseEnergy: gl.getUniformLocation(program, "u_mouseEnergy"),
     };
 
     const targetRatio = lowRes ? 0.22 : 0.36;
@@ -358,26 +365,42 @@ export default function AnimatedGradient({
 
       const currentParams = paramsRef.current;
       const elapsed = (time - startTimeRef.current) / 1000;
-      const speed = (currentParams.speed / 100) * 1.5;
+      const speed = (currentParams.speed / 100) * 1.25;
 
-      // Física líquida responsiva e visível: acompanha o cursor com ondas suaves na água
+      // Física líquida orgânica e aleatória: o movimento do mouse nunca prende o fundo a uma posição fixa;
+      // cada movimento injeta uma deriva turbulenta contínua e irrepetível
       const p = pointerFlowRef.current;
       const prevSmoothX = p.smoothX;
       const prevSmoothY = p.smoothY;
 
-      const followRate = 1.0 - Math.exp(-dt * 4.2);
+      const followRate = 1.0 - Math.exp(-dt * 1.85);
       p.smoothX += (p.rawX - p.smoothX) * followRate;
       p.smoothY += (p.rawY - p.smoothY) * followRate;
 
       const stepX = p.smoothX - prevSmoothX;
       const stepY = p.smoothY - prevSmoothY;
+      const stepMag = Math.hypot(stepX, stepY);
 
-      // Impulso contínuo na direção do movimento do cursor
-      p.velX = p.velX * Math.exp(-dt * 2.2) + stepX * 1.35;
-      p.velY = p.velY * Math.exp(-dt * 2.2) + stepY * 1.35;
+      // Rotaciona o vetor de impulso por um ângulo orgânico variável no tempo para nunca repetir o mesmo caminho
+      const wanderAngle =
+        Math.sin(elapsed * 0.37 + p.randomSeedX) * 0.85 +
+        Math.cos(elapsed * 0.23 + p.randomSeedY) * 0.65;
+      const cosA = Math.cos(wanderAngle);
+      const sinA = Math.sin(wanderAngle);
+      const organicStepX = stepX * cosA - stepY * sinA;
+      const organicStepY = stepX * sinA + stepY * cosA;
 
-      p.driftOffsetX += p.velX * dt * 4.5;
-      p.driftOffsetY += p.velY * dt * 4.5;
+      p.velX = p.velX * Math.exp(-dt * 1.65) + organicStepX * 0.55;
+      p.velY = p.velY * Math.exp(-dt * 1.65) + organicStepY * 0.55;
+
+      // Deriva contínua autônoma + deriva provocada pelo mouse (nunca volta ao estado anterior)
+      p.driftOffsetX +=
+        p.velX * dt * 1.45 + Math.sin(elapsed * 0.19 + p.randomSeedX) * dt * 0.018;
+      p.driftOffsetY +=
+        p.velY * dt * 1.45 + Math.cos(elapsed * 0.17 + p.randomSeedY) * dt * 0.018;
+
+      p.swirlPhase += (stepMag * 1.8 + dt * 0.08) * (1.0 + 0.3 * Math.sin(elapsed * 0.31));
+      const mouseEnergy = Math.min(1.0, Math.hypot(p.velX, p.velY) * 18.0);
 
       gl.uniform1f(uniforms.u_time, elapsed * speed + currentParams.offset * 0.01);
       gl.uniform2f(uniforms.u_resolution, canvas.width, canvas.height);
@@ -400,11 +423,12 @@ export default function AnimatedGradient({
       gl.uniform1f(uniforms.u_swirl, currentParams.swirl / 100);
       gl.uniform1f(
         uniforms.u_swirlIterations,
-        currentParams.swirl === 0 ? 0 : Math.min(currentParams.swirlIterations, 5)
+        currentParams.swirl === 0 ? 0 : Math.min(currentParams.swirlIterations, 10)
       );
 
       gl.uniform2f(uniforms.u_mousePos, p.smoothX, p.smoothY);
       gl.uniform2f(uniforms.u_flowDrift, p.driftOffsetX, p.driftOffsetY);
+      gl.uniform2f(uniforms.u_mouseEnergy, mouseEnergy, p.swirlPhase);
 
       gl.drawArrays(gl.TRIANGLES, 0, 6);
     };
@@ -554,6 +578,7 @@ uniform float u_swirl;
 uniform float u_swirlIterations;
 uniform vec2 u_mousePos;
 uniform vec2 u_flowDrift;
+uniform vec2 u_mouseEnergy;
 
 out vec4 fragColor;
 
@@ -612,18 +637,23 @@ vec4 blend_colors(vec4 c1, vec4 c2, vec4 c3, float mixer, float edgesWidth, floa
 
 void main() {
     vec2 screenUv = gl_FragCoord.xy / u_resolution.xy;
-    vec2 uv = screenUv;
+    float t = u_time * 0.17;
+    float mouseActivity = u_mouseEnergy.x;
+    float randomPhase = u_mouseEnergy.y;
 
-    // Halo líquido em torno do cursor que curva e ilumina as ondas de fundo
+    // Deforma a área de contato do mouse com ruído orgânico em movimento para nunca ser um círculo ou padrão fixo
     vec2 mouseDiff = screenUv - u_mousePos;
     mouseDiff.x *= u_resolution.x / max(1.0, u_resolution.y);
-    float distSq = dot(mouseDiff, mouseDiff);
-    float silkMask = exp(-distSq * 2.4);
-    float coreGlow = exp(-distSq * 6.5);
+    float organicWarpA = fbm(screenUv * 2.4 + u_flowDrift * 0.9 + vec2(t * 0.21, -t * 0.17));
+    float organicWarpB = fbm(screenUv * 1.9 - u_flowDrift * 0.7 + vec2(-t * 0.15, t * 0.25));
+    vec2 warpedDiff = mouseDiff + (vec2(organicWarpA, organicWarpB) - 0.5) * 0.32;
+    float distSq = dot(warpedDiff, warpedDiff);
+    float softTouch = exp(-distSq * 2.1);
 
-    float t = u_time * 0.35;
+    vec2 uv = screenUv;
 
-    float noise_scale = 0.0006 + 0.004 * u_scale;
+    // Escala das ondas líquidas
+    float noise_scale = 0.00105 + 0.0048 * u_scale;
 
     uv -= 0.5;
     uv *= (noise_scale * u_resolution);
@@ -631,27 +661,30 @@ void main() {
     uv /= u_pixelRatio;
     uv += 0.5;
 
-    // Deslocamento líquido visível que acompanha o passeio do mouse pelas ondas
-    vec2 cursorPull = (u_mousePos - 0.5) * 0.65 + mouseDiff * (-0.55 * silkMask);
-    vec2 gentleBreeze = u_flowDrift * (0.65 + 0.85 * silkMask) + cursorPull;
+    // Fluxo contínuo e aleatório: não prende o fundo à coordenada estática do mouse;
+    // desliza livremente com deriva acumulada e turbulência orgânica suave
+    vec2 rotatedDrift = rotate(u_flowDrift, u_rotation * 0.5 * PI);
+    vec2 curlOffset = vec2(organicWarpB - 0.5, 0.5 - organicWarpA) * (0.22 * softTouch * (0.45 + 0.55 * mouseActivity));
 
-    float driftX = sin(t * 0.23 + uv.y * 1.8 + gentleBreeze.x * 1.6) * 0.45 + cos(t * 0.17 + uv.x * 1.2 + gentleBreeze.y * 1.6) * 0.35;
-    float driftY = cos(t * 0.19 + uv.x * 1.5 + gentleBreeze.y * 1.6) * 0.45 + sin(t * 0.13 + uv.y * 1.4 - gentleBreeze.x * 1.6) * 0.35;
+    uv += rotatedDrift * 0.34 + curlOffset;
 
-    vec2 flowUv = uv + vec2(driftX, driftY) * 0.65 + gentleBreeze * 0.55;
+    // Campos de turbulência FBM em múltiplas escalas incomensuráveis (sem padrão repetitivo)
+    float n1 = fbm(uv * 1.35 + vec2(t * 0.23 + randomPhase * 0.12, -t * 0.19));
+    float n2 = fbm(uv * 2.15 - vec2(t * 0.17, t * 0.27 - randomPhase * 0.09) + n1 * 0.65);
+    float n3 = fbm(uv * 0.85 + vec2(-t * 0.13, t * 0.15) + vec2(n2, -n1) * 0.5);
 
-    float n1 = fbm(flowUv * 1.2 + vec2(t * 0.22, -t * 0.18));
-    float n2 = fbm(flowUv * 2.1 - vec2(t * 0.15, t * 0.27));
+    float angle = (n1 * 1.3 + n3 * 0.9) * TWO_PI + randomPhase * 0.25;
+    uv.x += (3.0 * u_distortion + 0.35) * n2 * cos(angle + t * 0.11);
+    uv.y += (3.0 * u_distortion + 0.35) * n2 * sin(angle - t * 0.13);
 
-    float angle = n1 * TWO_PI;
-    uv.x += (2.5 * u_distortion + 0.3) * n2 * cos(angle + t * 0.1);
-    uv.y += (2.5 * u_distortion + 0.3) * n2 * sin(angle - t * 0.12);
-
-    float iterations_number = ceil(clamp(u_swirlIterations, 1.0, 5.0));
+    // Redemoinhos orgânicos com frequências irracionais e fase variável para nunca formar grade estática
+    float iterations_number = ceil(clamp(u_swirlIterations, 1.0, 10.0));
     for (float i = 1.0; i <= iterations_number; i++) {
-        float fi = i * 1.37;
-        uv.x += (clamp(u_swirl, 0.0, 1.8) / i) * cos(t * 0.5 + fi * uv.y + n1);
-        uv.y += (clamp(u_swirl, 0.0, 1.8) / i) * sin(t * 0.42 + fi * uv.x - n2);
+        float freqX = i * 1.318 + sin(i * 2.17) * 0.25;
+        float freqY = i * 1.073 + cos(i * 1.73) * 0.25;
+        float phaseShift = randomPhase * (0.14 / i) + softTouch * 0.28 * (organicWarpA - 0.5);
+        uv.x += (clamp(u_swirl, 0.0, 2.0) / i) * cos(t * 0.75 + freqX * uv.y + n1 * 1.4 + phaseShift);
+        uv.y += (clamp(u_swirl, 0.0, 2.0) / i) * sin(t * 0.68 + freqY * uv.x - n2 * 1.4 - phaseShift);
     }
 
     float proportion = clamp(u_proportion, 0.0, 1.0);
@@ -659,12 +692,16 @@ void main() {
     float shape = 0.0;
     float mixer = 0.0;
     if (u_shape < 0.5) {
-      vec2 checks_shape_uv = uv * (0.4 + 2.8 * u_shapeScale);
-      shape = 0.5 + 0.5 * sin(checks_shape_uv.x + t * 0.2) * cos(checks_shape_uv.y - t * 0.15);
+      vec2 checks_shape_uv = uv * (0.48 + 3.2 * u_shapeScale);
+      float organicWave =
+          0.5 +
+          0.34 * sin(checks_shape_uv.x + n3 * 2.2) * cos(checks_shape_uv.y - n1 * 2.2) +
+          0.16 * sin(checks_shape_uv.x * 0.73 - checks_shape_uv.y * 0.61 + t * 0.25 + n2 * 2.5);
+      shape = clamp(organicWave, 0.0, 1.0);
       mixer = shape + 0.48 * sign(proportion - 0.5) * pow(abs(proportion - 0.5), 0.5);
     } else if (u_shape < 1.5) {
-      vec2 stripes_shape_uv = uv * (0.25 + 2.5 * u_shapeScale);
-      float f = fract(stripes_shape_uv.y + t * 0.12);
+      vec2 stripes_shape_uv = uv * (0.25 + 3.0 * u_shapeScale);
+      float f = fract(stripes_shape_uv.y + n1 * 0.35);
       shape = smoothstep(0.0, 0.55, f) * smoothstep(1.0, 0.45, f);
       mixer = shape + 0.48 * sign(proportion - 0.5) * pow(abs(proportion - 0.5), 0.5);
     } else {
@@ -677,9 +714,15 @@ void main() {
       mixer = shape;
     }
 
-    vec4 color_mix = blend_colors(u_color1, u_color2, u_color3, mixer + coreGlow * 0.16, 1.0 - clamp(u_softness, 0.0, 1.0), 0.01 + 0.01 * u_scale);
-    vec3 finalRgb = mix(color_mix.rgb, u_color3.rgb, coreGlow * 0.18);
+    vec4 color_mix = blend_colors(
+      u_color1,
+      u_color2,
+      u_color3,
+      mixer + softTouch * (n3 - 0.45) * 0.08,
+      1.0 - clamp(u_softness, 0.0, 1.0),
+      0.04 + 0.02 * u_scale
+    );
 
-    fragColor = vec4(finalRgb, color_mix.a);
+    fragColor = color_mix;
 }
 `;

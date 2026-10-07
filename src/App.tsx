@@ -39,6 +39,7 @@ import { cn } from './lib/utils.ts';
 import {
   talkToOndaFriend,
   OndaConversationMessage,
+  OndaClarifyingQuestion,
 } from './lib/liveNoteEngine.ts';
 import ondaFullLogoSrc from './assets/images/onda_full_logo_1791169131743.jpg';
 import ondaWaveOLogoSrc from './assets/images/onda_wave_o_logo.jpg';
@@ -692,9 +693,10 @@ function CursorGlowSurface({
       const threshold = 115;
 
       if (dist < threshold) {
-        const opacity = Math.max(0, 1 - dist / threshold);
-        glowRef.current.style.opacity = String(opacity);
-        glowRef.current.style.background = `radial-gradient(${circleRadius}px circle at ${x}px ${y}px, rgba(255,255,255,1) 0%, rgba(255,255,255,0.55) 42%, transparent 80%)`;
+        const rawRatio = Math.max(0, 1 - dist / threshold);
+        const smoothOpacity = rawRatio * rawRatio * 0.72;
+        glowRef.current.style.opacity = String(smoothOpacity);
+        glowRef.current.style.background = `radial-gradient(${circleRadius}px circle at ${x}px ${y}px, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0.35) 48%, transparent 82%)`;
       } else {
         glowRef.current.style.opacity = '0';
       }
@@ -709,15 +711,15 @@ function CursorGlowSurface({
       ref={glowRef}
       style={{
         borderRadius: radiusPx ? `${radiusPx}px` : 'inherit',
-        padding: '1.5px',
+        padding: '1.25px',
         WebkitMask:
           'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
         WebkitMaskComposite: 'xor',
         maskComposite: 'exclude',
         opacity: 0,
-        filter: 'drop-shadow(0 0 8px rgba(255, 255, 255, 0.95))',
+        filter: 'drop-shadow(0 0 5px rgba(255, 255, 255, 0.55))',
       }}
-      className="pointer-events-none absolute inset-0 z-20 transition-opacity duration-150"
+      className="pointer-events-none absolute inset-0 z-20 transition-opacity duration-300 ease-out"
     />
   );
 
@@ -756,53 +758,24 @@ function CursorGlowSurface({
 }
 
 /**
- * Moldura da janela principal com iluminação de proximidade nas bordas
- * e no traço divisório central.
+ * Container de página inteira (sem a janela flutuante externa),
+ * mantendo apenas o traço divisório vertical entre Sidebar e Área Principal.
  */
 function GlassWindowFrame({
-  gradientConfig,
-  spotlightId,
   isLocked,
   children,
 }: {
-  gradientConfig: GradientConfig;
-  spotlightId: string;
+  gradientConfig?: GradientConfig;
+  spotlightId?: string;
   isLocked: boolean;
   children: React.ReactNode;
 }) {
   const windowRef = useRef<HTMLDivElement>(null);
   const rafIdRef = useRef<number | null>(null);
-  const borderGradRef = useRef<SVGRadialGradientElement>(null);
-  const borderRectRef = useRef<SVGRectElement>(null);
   const dividerSpotlightRef = useRef<HTMLDivElement>(null);
-
-  const mouseX = useMotionValue(0);
-  const mouseY = useMotionValue(0);
-  const proximityVal = useMotionValue(0);
-
-  const activeScale = useSpring(useTransform(proximityVal, [0, 1], [1, 1.005]), {
-    stiffness: 280,
-    damping: 30,
-    mass: 0.7,
-  });
-
-  const rotateX = useSpring(useTransform(mouseY, [-400, 400], [1.2, -1.2]), {
-    stiffness: 280,
-    damping: 30,
-    mass: 0.7,
-  });
-  const rotateY = useSpring(useTransform(mouseX, [-600, 600], [-1.2, 1.2]), {
-    stiffness: 280,
-    damping: 30,
-    mass: 0.7,
-  });
 
   useEffect(() => {
     if (isLocked) {
-      proximityVal.set(0);
-      mouseX.set(0);
-      mouseY.set(0);
-      if (borderRectRef.current) borderRectRef.current.style.opacity = '0';
       if (dividerSpotlightRef.current) dividerSpotlightRef.current.style.opacity = '0';
       return;
     }
@@ -812,54 +785,23 @@ function GlassWindowFrame({
 
     const processPointer = () => {
       rafIdRef.current = null;
-      if (!windowRef.current) return;
+      if (!windowRef.current || !dividerSpotlightRef.current) return;
       const rect = windowRef.current.getBoundingClientRect();
 
       const x = latestClientX - rect.left;
       const y = latestClientY - rect.top;
 
-      const dxOutside = Math.max(0, -x, x - rect.width);
-      const dyOutside = Math.max(0, -y, y - rect.height);
-      const distOutside = Math.sqrt(dxOutside * dxOutside + dyOutside * dyOutside);
+      const dividerX = dividerSpotlightRef.current.offsetLeft || 340;
+      const distToDividerX = Math.abs(x - dividerX);
+      const DIVIDER_THRESHOLD = 145;
 
-      const THRESHOLD = 180;
-
-      if (distOutside < THRESHOLD) {
-        const proximity = Math.max(0, 1 - distOutside / THRESHOLD);
-        proximityVal.set(proximity);
-        mouseX.set((x - rect.width / 2) * proximity);
-        mouseY.set((y - rect.height / 2) * proximity);
-
-        if (borderGradRef.current) {
-          borderGradRef.current.setAttribute('cx', String(x));
-          borderGradRef.current.setAttribute('cy', String(y));
-        }
-        if (borderRectRef.current) {
-          borderRectRef.current.style.opacity = String(proximity);
-        }
-
-        if (dividerSpotlightRef.current) {
-          const dividerX = dividerSpotlightRef.current.offsetLeft || 340;
-          const distToDividerX = Math.abs(x - dividerX);
-          const distToDivider = Math.hypot(distToDividerX, dyOutside);
-          const DIVIDER_THRESHOLD = 145;
-
-          if (distToDivider < DIVIDER_THRESHOLD) {
-            const divProximity = Math.max(0, 1 - distToDivider / DIVIDER_THRESHOLD);
-            dividerSpotlightRef.current.style.opacity = String(divProximity);
-            dividerSpotlightRef.current.style.background = `radial-gradient(160px circle at 1.5px ${y}px, #ffffff 0%, rgba(255, 255, 255, 0.95) 35%, rgba(255, 255, 255, 0.35) 65%, transparent 85%)`;
-          } else {
-            dividerSpotlightRef.current.style.opacity = '0';
-          }
-        }
+      if (distToDividerX < DIVIDER_THRESHOLD) {
+        const rawProx = Math.max(0, 1 - distToDividerX / DIVIDER_THRESHOLD);
+        const divProximity = rawProx * rawProx * 0.7;
+        dividerSpotlightRef.current.style.opacity = String(divProximity);
+        dividerSpotlightRef.current.style.background = `radial-gradient(190px circle at 1px ${y}px, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.45) 42%, transparent 85%)`;
       } else {
-        if (proximityVal.get() !== 0) {
-          proximityVal.set(0);
-          mouseX.set(0);
-          mouseY.set(0);
-          if (borderRectRef.current) borderRectRef.current.style.opacity = '0';
-          if (dividerSpotlightRef.current) dividerSpotlightRef.current.style.opacity = '0';
-        }
+        dividerSpotlightRef.current.style.opacity = '0';
       }
     };
 
@@ -878,106 +820,35 @@ function GlassWindowFrame({
         cancelAnimationFrame(rafIdRef.current);
       }
     };
-  }, [isLocked, mouseX, mouseY, proximityVal]);
+  }, [isLocked]);
 
   return (
-    <div className="w-full h-full [perspective:1000px]">
-      <motion.div
-        ref={windowRef}
+    <div
+      ref={windowRef}
+      className={cn(
+        'relative w-full h-full flex overflow-hidden',
+        isLocked && 'pointer-events-none select-none opacity-85'
+      )}
+    >
+      {/* LINHA VERTICAL FIXA NA DIVISÃO DO SIDEBAR COM SPOTLIGHT SUAVE */}
+      <div
+        className="hidden md:block absolute top-0 bottom-0 left-72 sm:left-80 md:left-[336px] lg:left-[356px] w-[1px] pointer-events-none z-30 transition-all duration-500"
         style={{
-          scale: activeScale,
-          rotateX,
-          rotateY,
-          transformStyle: 'preserve-3d',
-          willChange: 'transform',
-          boxShadow:
-            '0 0 24px 2px rgba(255, 255, 255, 0.35), 0 25px 50px -12px rgba(0, 0, 0, 0.45)',
+          background: 'rgba(255, 255, 255, 0.48)',
+          boxShadow: '0 0 10px 1px rgba(255, 255, 255, 0.18)',
         }}
-        className={cn(
-          'relative w-full h-full flex overflow-hidden rounded-3xl transition-shadow duration-500',
-          isLocked && 'pointer-events-none select-none opacity-85 scale-[0.995]'
-        )}
-      >
-        {/* LINHA BASE PERIMETRAL */}
-        <div
-          className="absolute inset-0 rounded-3xl pointer-events-none z-30 transition-all duration-500"
-          style={{
-            border: '1px solid rgba(255, 255, 255, 0.65)',
-            boxShadow:
-              '0 0 16px 2px rgba(255, 255, 255, 0.35), inset 0 0 16px 2px rgba(255, 255, 255, 0.35)',
-          }}
-        />
+      />
+      <div
+        ref={dividerSpotlightRef}
+        className="hidden md:block absolute top-0 bottom-0 left-72 sm:left-80 md:left-[336px] lg:left-[356px] -ml-[1px] w-[2px] pointer-events-none transition-opacity duration-300 ease-out z-30"
+        style={{
+          opacity: 0,
+          filter: 'drop-shadow(0 0 6px rgba(255, 255, 255, 0.65))',
+        }}
+      />
 
-        {/* SPOTLIGHT BRANCO DINÂMICO AO REDOR DAS BORDAS E CANTOS */}
-        <svg
-          className="absolute inset-0 w-full h-full pointer-events-none z-30 overflow-visible"
-          style={{ borderRadius: '1.5rem' }}
-        >
-          <defs>
-            <radialGradient
-              id={spotlightId}
-              ref={borderGradRef}
-              cx="0"
-              cy="0"
-              r="260"
-              gradientUnits="userSpaceOnUse"
-            >
-              <stop offset="0%" stopColor="#ffffff" stopOpacity="1" />
-              <stop offset="35%" stopColor="#ffffff" stopOpacity="0.9" />
-              <stop offset="65%" stopColor="#ffffff" stopOpacity="0.35" />
-              <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
-            </radialGradient>
-          </defs>
-          <rect
-            ref={borderRectRef}
-            x="1"
-            y="1"
-            width="calc(100% - 2px)"
-            height="calc(100% - 2px)"
-            rx="23"
-            ry="23"
-            fill="none"
-            stroke={`url(#${spotlightId})`}
-            strokeWidth="2"
-            style={{
-              opacity: 0,
-              filter: 'drop-shadow(0 0 10px rgba(255, 255, 255, 0.9))',
-              transition: 'opacity 150ms ease-out',
-            }}
-          />
-        </svg>
-
-        {/* Fundo interno translúcido com desfoque sutil */}
-        <div className="absolute inset-0 blur-[3px] scale-105 pointer-events-none transform-gpu">
-          <AnimatedGradient
-            config={gradientConfig}
-            lowRes
-            noise={{ opacity: 0.03, scale: 1 }}
-            className="w-full h-full opacity-35"
-          />
-        </div>
-        <div className="absolute inset-0 bg-white/[0.18] dark:bg-slate-950/[0.32] pointer-events-none z-[1]" />
-
-        {/* LINHA VERTICAL FIXA NA DIVISÃO DO SIDEBAR COM SPOTLIGHT DE PROXIMIDADE REAL */}
-        <div
-          className="hidden md:block absolute top-0 bottom-0 left-72 sm:left-80 md:left-[336px] lg:left-[356px] w-[1px] pointer-events-none z-30 transition-all duration-500"
-          style={{
-            background: 'rgba(255, 255, 255, 0.65)',
-            boxShadow: '0 0 14px 1.5px rgba(255, 255, 255, 0.32)',
-          }}
-        />
-        <div
-          ref={dividerSpotlightRef}
-          className="hidden md:block absolute top-0 bottom-0 left-72 sm:left-80 md:left-[336px] lg:left-[356px] -ml-[1.5px] w-[3px] pointer-events-none transition-opacity duration-150 z-30"
-          style={{
-            opacity: 0,
-            filter: 'drop-shadow(0 0 10px rgba(255, 255, 255, 0.95))',
-          }}
-        />
-
-        {/* Conteúdo interno da janela (Sidebar + Main) */}
-        <div className="relative z-10 flex flex-col md:flex-row w-full h-full">{children}</div>
-      </motion.div>
+      {/* Conteúdo alinhado de acordo com a página inteira (Sidebar + Main) */}
+      <div className="relative z-10 flex flex-col md:flex-row w-full h-full">{children}</div>
     </div>
   );
 }
@@ -1022,6 +893,21 @@ export default function App() {
   const [addedLinesFeedback, setAddedLinesFeedback] = useState<string | null>(null);
   const [addedTableFeedback, setAddedTableFeedback] = useState<string | null>(null);
   const [appliedNoteFeedback, setAppliedNoteFeedback] = useState<string | null>(null);
+
+  // Sessão da Janela de Perguntas estilo Claude Code (por nota)
+  const [questionSessions, setQuestionSessions] = useState<
+    Record<
+      string,
+      | {
+          messageId: string;
+          questions: OndaClarifyingQuestion[];
+          currentIndex: number;
+          selectedOptions: Record<string, string[]>;
+          customInputs: Record<string, string>;
+        }
+      | undefined
+    >
+  >({});
 
   // Rascunho local da nota ativa (Título + Blocos Visuais Ricos)
   const [titleDraft, setTitleDraft] = useState<string>('');
@@ -1377,6 +1263,7 @@ export default function App() {
           writeToNoteLines: reply.writeToNoteLines,
           smartTableLabel: reply.smartTableLabel,
           smartTableData: reply.smartTableData,
+          clarifyingQuestions: reply.clarifyingQuestions,
           createdAt: new Date().toISOString(),
         };
 
@@ -1384,6 +1271,19 @@ export default function App() {
           ...prev,
           [activeNote.id]: [...(prev[activeNote.id] || []), ondaEntry],
         }));
+
+        if (reply.clarifyingQuestions && reply.clarifyingQuestions.length > 0) {
+          setQuestionSessions((prev) => ({
+            ...prev,
+            [activeNote.id]: {
+              messageId: ondaEntry.id,
+              questions: reply.clarifyingQuestions!,
+              currentIndex: 0,
+              selectedOptions: {},
+              customInputs: {},
+            },
+          }));
+        }
 
         if (reply.autoApplyToNote) {
           if (reply.replaceEntireNoteContent || reply.updatedNoteTitle) {
@@ -1420,6 +1320,96 @@ export default function App() {
     () => (activeNote ? ondaConversations[activeNote.id] || [] : []),
     [activeNote, ondaConversations]
   );
+
+  const activeQuestionSession = useMemo(
+    () => (activeNote ? questionSessions[activeNote.id] || null : null),
+    [activeNote, questionSessions]
+  );
+
+  const handleToggleQuestionOption = (
+    questionId: string,
+    optionText: string,
+    allowMultiple?: boolean
+  ) => {
+    if (!activeNote || !activeQuestionSession) return;
+    setQuestionSessions((prev) => {
+      const current = prev[activeNote.id];
+      if (!current) return prev;
+      const existing = current.selectedOptions[questionId] || [];
+      let nextSelected: string[];
+      if (allowMultiple) {
+        nextSelected = existing.includes(optionText)
+          ? existing.filter((o) => o !== optionText)
+          : [...existing, optionText];
+      } else {
+        nextSelected = existing.includes(optionText) ? [] : [optionText];
+      }
+      return {
+        ...prev,
+        [activeNote.id]: {
+          ...current,
+          selectedOptions: {
+            ...current.selectedOptions,
+            [questionId]: nextSelected,
+          },
+        },
+      };
+    });
+  };
+
+  const handleQuestionCustomInput = (questionId: string, val: string) => {
+    if (!activeNote || !activeQuestionSession) return;
+    setQuestionSessions((prev) => {
+      const current = prev[activeNote.id];
+      if (!current) return prev;
+      return {
+        ...prev,
+        [activeNote.id]: {
+          ...current,
+          customInputs: {
+            ...current.customInputs,
+            [questionId]: val,
+          },
+        },
+      };
+    });
+  };
+
+  const handleStepQuestionSession = (nextIdx: number) => {
+    if (!activeNote || !activeQuestionSession) return;
+    setQuestionSessions((prev) => {
+      const current = prev[activeNote.id];
+      if (!current) return prev;
+      const clamped = Math.max(0, Math.min(current.questions.length - 1, nextIdx));
+      return {
+        ...prev,
+        [activeNote.id]: {
+          ...current,
+          currentIndex: clamped,
+        },
+      };
+    });
+  };
+
+  const handleSubmitQuestionWindow = async () => {
+    if (!activeNote || !activeQuestionSession) return;
+    const summaryLines = activeQuestionSession.questions.map((q, idx) => {
+      const chosen = activeQuestionSession.selectedOptions[q.id] || [];
+      const custom = (activeQuestionSession.customInputs[q.id] || '').trim();
+      const combined = [...chosen, ...(custom ? [custom] : [])];
+      const answerStr = combined.length > 0 ? combined.join(', ') : 'Padrão / aberto';
+      return `${idx + 1}. ${q.question}\n   → ${answerStr}`;
+    });
+
+    const formattedReply = `Minhas respostas:\n${summaryLines.join('\n')}`;
+
+    setQuestionSessions((prev) => ({
+      ...prev,
+      [activeNote.id]: undefined,
+    }));
+
+    await sendChatMessageToOnda(formattedReply);
+  };
 
   useEffect(() => {
     if (ondaScrollRef.current) {
@@ -2015,19 +2005,20 @@ export default function App() {
     }
   };
 
+  // Janela principal da frente (mais clara e luminosa; no tema escuro usa as cores safira/ciano/perolado da logo Onda)
   const gradientConfig: GradientConfig = useMemo(() => {
     return isDark
       ? {
           preset: 'custom',
-          color1: '#0c1938',
-          color2: '#3b82f6',
-          color3: '#2563eb',
+          color1: '#0c2d6b',
+          color2: '#0284c7',
+          color3: '#38bdf8',
           rotation: -45,
-          proportion: 46,
-          scale: 0.02,
+          proportion: 48,
+          scale: 0.025,
           speed: 10,
           distortion: 5,
-          swirl: 50,
+          swirl: 48,
           swirlIterations: 12,
           softness: 75,
           offset: 0,
@@ -2036,11 +2027,11 @@ export default function App() {
         }
       : {
           preset: 'custom',
-          color1: '#dbeafe',
-          color2: '#3b82f6',
+          color1: '#e0f2fe',
+          color2: '#60a5fa',
           color3: '#ffffff',
           rotation: -45,
-          proportion: 40,
+          proportion: 42,
           scale: 0.03,
           speed: 10,
           distortion: 5,
@@ -2053,21 +2044,22 @@ export default function App() {
         };
   }, [isDark]);
 
+  // Background líquido da página (cores claras originais no tema branco e azul-safira/ciano da logo Onda no tema escuro)
   const zoomedGradientConfig: GradientConfig = useMemo(() => {
     return isDark
       ? {
           preset: 'custom',
-          color1: '#0a1530',
-          color2: '#3b82f6',
-          color3: '#1d4ed8',
+          color1: '#0c2d6b',
+          color2: '#0284c7',
+          color3: '#38bdf8',
           rotation: -45,
-          proportion: 55,
-          scale: 0.06,
+          proportion: 48,
+          scale: 0.05,
           speed: 8,
           distortion: 6,
-          swirl: 50,
+          swirl: 48,
           swirlIterations: 12,
-          softness: 80,
+          softness: 78,
           offset: 0,
           shape: 'Checks',
           shapeSize: 68,
@@ -2125,20 +2117,12 @@ export default function App() {
         className={cn(
           'group relative w-full rounded-2xl px-4 py-3 text-left transition-all duration-200 cursor-pointer overflow-hidden',
           isSelected
-            ? 'bg-white/50 dark:bg-white/[0.14] border border-white/85 dark:border-white/35 shadow-[0_8px_24px_rgba(0,0,0,0.07),0_0_16px_rgba(255,255,255,0.22)]'
-            : 'bg-transparent hover:bg-white/25 dark:hover:bg-white/[0.06] border border-transparent hover:border-white/35 dark:hover:border-white/15'
+            ? 'bg-white/24 dark:bg-white/[0.10] backdrop-blur-xl border border-white/65 dark:border-white/30 shadow-[0_8px_24px_rgba(0,0,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.65)]'
+            : 'bg-white/[0.06] dark:bg-white/[0.03] hover:bg-white/18 dark:hover:bg-white/[0.07] backdrop-blur-md border border-white/25 dark:border-white/10 hover:border-white/45 dark:hover:border-white/20'
         )}
       >
-        {isSelected && (
-          <motion.div
-            layoutId="sidebar-active-pill"
-            transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-            className="absolute left-1.5 top-3 bottom-3 w-[3px] rounded-full bg-slate-900 dark:bg-white shadow-[0_0_8px_rgba(255,255,255,0.9)]"
-          />
-        )}
-
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-[14px] font-bold text-slate-950 dark:text-white truncate leading-snug">
+          <h3 className="text-[15.5px] font-bold text-slate-950 dark:text-white truncate leading-snug">
             {displayTitle}
           </h3>
           <div className="flex items-center gap-0.5 shrink-0">
@@ -2166,7 +2150,7 @@ export default function App() {
           </div>
         </div>
 
-        <div className="mt-1 flex items-center justify-between gap-2 text-[12.5px] min-w-0">
+        <div className="mt-1 flex items-center justify-between gap-2 text-[13.5px] min-w-0">
           <div className="flex items-baseline gap-2 min-w-0">
             <span className="font-semibold text-slate-900/85 dark:text-white/85 shrink-0 tabular-nums">
               {dateLabel}
@@ -2179,7 +2163,7 @@ export default function App() {
           </div>
 
           {progress && (
-            <span className="text-[11px] font-semibold text-slate-800/80 dark:text-white/75 shrink-0 tabular-nums">
+            <span className="text-[12px] font-semibold text-slate-800/80 dark:text-white/75 shrink-0 tabular-nums">
               {progress.done}/{progress.total}
             </span>
           )}
@@ -2200,10 +2184,10 @@ export default function App() {
   const userFirstName = user?.name ? user.name.split(' ')[0] : '';
   const bodyFontSizeClass =
     preferences.editorFontSize === 'sm'
-      ? 'text-[14.5px]'
+      ? 'text-[16.5px]'
       : preferences.editorFontSize === 'lg'
-      ? 'text-[17.5px]'
-      : 'text-[16px]';
+      ? 'text-[20.5px]'
+      : 'text-[18.5px]';
 
   const renderFormatMenuItems = () => (
     <>
@@ -2322,20 +2306,19 @@ export default function App() {
   );
 
   return (
-    <div className="relative h-dvh md:h-screen w-full px-2.5 sm:px-8 md:px-12 py-2.5 sm:py-8 flex items-center justify-center font-sans antialiased select-none overflow-hidden transition-colors duration-500 [perspective:1000px]">
-      {/* 1. Fundo externo líquido interativo com o mouse */}
-      <div className="fixed -inset-16 scale-125 blur-[12px] origin-center pointer-events-none z-0 transform-gpu">
+    <div className="relative h-dvh md:h-screen w-full flex items-stretch justify-stretch font-sans antialiased select-none overflow-hidden transition-colors duration-500">
+      {/* 1. Fundo líquido da página inteira (embaçado na medida certa sem esconder as ondas) */}
+      <div className="fixed -inset-6 scale-[1.04] blur-[7px] origin-center pointer-events-none z-0 transform-gpu">
         <AnimatedGradient
           config={zoomedGradientConfig}
-          lowRes
           noise={{ opacity: 0.04, scale: 1 }}
           className="w-full h-full"
         />
       </div>
-      <div className="fixed inset-0 bg-slate-950/28 dark:bg-slate-950/42 pointer-events-none z-[1]" />
+      <div className="fixed inset-0 bg-white/[0.08] dark:bg-[#071c44]/32 pointer-events-none z-[1]" />
 
-      {/* 2. Janela Principal Fixa — Notas & Chat na mesma janela */}
-      <div className="relative z-10 w-[96vw] sm:w-[92vw] max-w-[1720px] h-[93dvh] sm:h-[88vh] min-h-0 md:min-h-[560px] max-h-[920px]">
+      {/* 2. Conteúdo alinhado diretamente com a página inteira (sem a janela da frente) */}
+      <div className="relative z-10 w-full h-full min-h-0">
         <GlassWindowFrame
           gradientConfig={gradientConfig}
           spotlightId="border-spotlight-main"
@@ -2385,7 +2368,7 @@ export default function App() {
              ========================================================= */}
           <aside
             className={cn(
-              'relative w-72 sm:w-80 md:w-[336px] lg:w-[356px] shrink-0 flex flex-col justify-between min-h-0 h-full p-4 sm:p-5 bg-white/80 dark:bg-slate-950/85 md:bg-white/[0.06] md:dark:bg-slate-950/[0.15] backdrop-blur-xl md:backdrop-blur-none transition-transform duration-200 z-40 md:z-auto',
+              'relative w-72 sm:w-80 md:w-[336px] lg:w-[356px] shrink-0 flex flex-col justify-between min-h-0 h-full p-4 sm:p-5 bg-white/75 dark:bg-[#0b2454]/85 md:bg-white/[0.05] md:dark:bg-[#0c285e]/[0.16] backdrop-blur-xl md:backdrop-blur-[2px] transition-transform duration-200 z-40 md:z-auto',
               'max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:border-r max-md:border-white/50',
               isMobileSidebarOpen
                 ? 'max-md:translate-x-0'
@@ -2406,12 +2389,12 @@ export default function App() {
                 </button>
               </div>
 
-              {/* Barra de Busca Integrada com Botão de Nova Nota (ambos com brilho no cursor) */}
+              {/* Barra de Busca Integrada com Botão de Nova Nota (em vidro translúcido) */}
               <div className="flex items-center gap-2 mb-4 shrink-0">
                 <CursorGlowSurface
                   enabled={preferences.cursorGlowEnabled}
                   radius={150}
-                  className="relative flex-1 min-w-0 rounded-2xl bg-white/40 dark:bg-white/[0.09] border border-white/70 dark:border-white/22 shadow-2xs"
+                  className="relative flex-1 min-w-0 rounded-2xl bg-white/22 dark:bg-white/[0.08] backdrop-blur-xl border border-white/60 dark:border-white/25 shadow-[0_6px_20px_rgba(0,0,0,0.04),inset_0_1px_1px_rgba(255,255,255,0.6)]"
                 >
                   <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-700/75 dark:text-white/60 pointer-events-none" />
                   <input
@@ -2419,7 +2402,7 @@ export default function App() {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Buscar notas..."
-                    className="w-full pl-9.5 pr-7 py-2 rounded-2xl bg-transparent text-[13px] font-medium text-slate-950 dark:text-white placeholder:text-slate-700/65 dark:placeholder:text-white/50 focus:outline-none focus:bg-white/40 dark:focus:bg-white/[0.08] transition-all"
+                    className="w-full pl-9.5 pr-7 py-2 rounded-2xl bg-transparent text-[14px] font-medium text-slate-950 dark:text-white placeholder:text-slate-700/65 dark:placeholder:text-white/50 focus:outline-none focus:bg-white/20 dark:focus:bg-white/[0.06] transition-all"
                   />
                   {searchQuery && (
                     <button
@@ -2439,7 +2422,7 @@ export default function App() {
                   radius={110}
                   onClick={handleCreateNewNote}
                   title="Nova nota"
-                  className="h-[38px] px-3 rounded-2xl bg-white/55 dark:bg-white/[0.14] hover:bg-white/80 dark:hover:bg-white/[0.24] border border-white/80 dark:border-white/30 text-slate-950 dark:text-white flex items-center justify-center gap-1.5 text-[12.5px] font-semibold shadow-2xs transition-all cursor-pointer shrink-0"
+                  className="h-[38px] px-3.5 rounded-2xl bg-white/24 dark:bg-white/[0.10] hover:bg-white/40 dark:hover:bg-white/[0.18] backdrop-blur-xl border border-white/65 dark:border-white/28 text-slate-950 dark:text-white flex items-center justify-center gap-1.5 text-[13.5px] font-semibold shadow-[0_6px_20px_rgba(0,0,0,0.04),inset_0_1px_1px_rgba(255,255,255,0.65)] transition-all cursor-pointer shrink-0"
                 >
                   <SquarePen className="w-3.5 h-3.5" />
                   <span>Nova</span>
@@ -2517,12 +2500,12 @@ export default function App() {
             <div className="relative z-30 flex items-center justify-between gap-2 sm:gap-3 pb-4 border-b border-white/35 dark:border-white/15 shrink-0">
               <div className="hidden lg:block min-w-[140px]" />
 
-              {/* ILHA UNIFICADA DE FORMATAÇÃO DA NOTA (Com Brilho no Cursor e Sem Seta de Compartilhar) */}
+              {/* ILHA UNIFICADA DE FORMATAÇÃO DA NOTA (Em Vidro Translúcido) */}
               <div ref={formatMenuRef} className="relative">
                 <CursorGlowSurface
                   enabled={preferences.cursorGlowEnabled}
                   radius={150}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/45 dark:bg-white/[0.10] border border-white/80 dark:border-white/25 backdrop-blur-xl shadow-[0_8px_24px_rgba(0,0,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.65)]"
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/24 dark:bg-white/[0.09] border border-white/65 dark:border-white/25 backdrop-blur-xl shadow-[0_8px_24px_rgba(0,0,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.65)]"
                 >
                   <button
                     type="button"
@@ -2666,7 +2649,7 @@ export default function App() {
                   className={cn(
                     'inline-flex items-center justify-center rounded-full transition-all duration-300',
                     isModeSelectorOpen
-                      ? 'p-1 bg-white/45 dark:bg-white/[0.10] border border-white/80 dark:border-white/25 backdrop-blur-xl shadow-[0_6px_20px_rgba(0,0,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.65)]'
+                      ? 'p-1 bg-white/24 dark:bg-white/[0.09] border border-white/65 dark:border-white/25 backdrop-blur-xl shadow-[0_6px_20px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.65)]'
                       : 'p-0 bg-transparent border border-transparent shadow-none'
                   )}
                 >
@@ -2862,7 +2845,7 @@ export default function App() {
                       }
                     }
                   }}
-                  className="flex-1 min-h-0 flex flex-col overflow-y-auto pt-3 pb-32 max-w-3xl w-full mx-auto cursor-text [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                  className="flex-1 min-h-0 flex flex-col overflow-y-auto pt-3 pb-32 w-full px-1 sm:px-2 cursor-text [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
                 >
                   {/* 1ª Linha: Título da Nota */}
                   <input
@@ -2882,11 +2865,11 @@ export default function App() {
                       }
                     }}
                     placeholder="Título da nota"
-                    className="w-full bg-transparent text-[26px] sm:text-[32px] font-bold tracking-tight text-slate-950 dark:text-white placeholder:text-slate-700/45 dark:placeholder:text-white/30 focus:outline-none shrink-0 leading-tight mb-4 select-text"
+                    className="w-full bg-transparent text-[30px] sm:text-[36px] font-bold tracking-tight text-slate-950 dark:text-white placeholder:text-slate-700/45 dark:placeholder:text-white/30 focus:outline-none shrink-0 leading-tight mb-4 select-text"
                   />
 
                   {/* Linhas da Nota (Sem linha preta vertical e sem texto de fundo) */}
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
                     {blocks.map((block, idx) => (
                       <div
                         key={block.id}
@@ -2903,7 +2886,7 @@ export default function App() {
                           {block.type === 'table' ? (
                             <div className="my-2 rounded-2xl overflow-hidden border border-white/75 dark:border-white/25 bg-white/45 dark:bg-slate-950/35 backdrop-blur-md shadow-sm">
                               <div className="overflow-x-auto">
-                                <table className="w-full border-collapse text-left text-[14px]">
+                                <table className="w-full border-collapse text-left text-[15.5px]">
                                   <tbody>
                                     {(
                                       block.tableData || [
@@ -3028,7 +3011,7 @@ export default function App() {
                             </div>
                           ) : block.type === 'numbered' ? (
                             <div className="flex items-start gap-2">
-                              <span className="mt-0.5 text-[15.5px] font-bold text-slate-800 dark:text-white/80 tabular-nums shrink-0 min-w-[22px]">
+                              <span className="mt-0.5 text-[17.5px] font-bold text-slate-800 dark:text-white/80 tabular-nums shrink-0 min-w-[24px]">
                                 {getNumberedIndex(idx)}.
                               </span>
                               <AutoResizeBlockInput
@@ -3074,7 +3057,7 @@ export default function App() {
                                 inputRef={(el) => {
                                   blockRefs.current[block.id] = el;
                                 }}
-                                className="text-[21px] sm:text-[22px] font-bold tracking-tight leading-snug text-slate-950 dark:text-white"
+                                className="text-[24px] sm:text-[26px] font-bold tracking-tight leading-snug text-slate-950 dark:text-white"
                               />
                             </div>
                           ) : block.type === 'subheading' ? (
@@ -3088,7 +3071,7 @@ export default function App() {
                                 inputRef={(el) => {
                                   blockRefs.current[block.id] = el;
                                 }}
-                                className="text-[17.5px] font-semibold leading-snug text-slate-900 dark:text-white/95"
+                                className="text-[20px] sm:text-[21px] font-semibold leading-snug text-slate-900 dark:text-white/95"
                               />
                             </div>
                           ) : (
@@ -3117,18 +3100,21 @@ export default function App() {
                    MODO CHAT (NA MESMA JANELA PRINCIPAL)
                    A IA conversa com o usuário e ajusta a nota ativa conforme pedido
                    ========================================================= */
-                <div className="flex-1 min-h-0 flex flex-col max-w-3xl w-full mx-auto pt-3 pb-2 overflow-hidden">
+                <div className="relative flex-1 min-h-0 flex flex-col max-w-3xl w-full mx-auto pt-3 pb-2 overflow-hidden">
                   {/* Histórico de mensagens do Chat */}
                   <div
                     ref={ondaScrollRef}
-                    className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1 pb-6 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                    className={cn(
+                      'flex-1 min-h-0 overflow-y-auto space-y-4 pr-1 pb-6 transition-all duration-300 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]',
+                      activeQuestionSession && 'blur-[5px] pointer-events-none select-none opacity-60'
+                    )}
                   >
                     {activeConversation.length === 0 ? (
                       <div className="h-full flex flex-col items-center justify-center text-center px-4 py-8">
-                        <h3 className="text-[18px] font-bold text-slate-950 dark:text-white tracking-tight">
+                        <h3 className="text-[20px] font-bold text-slate-950 dark:text-white tracking-tight">
                           {userFirstName ? `Oi, ${userFirstName}!` : 'Chat com o Onda'}
                         </h3>
-                        <p className="text-[13.5px] text-slate-800/75 dark:text-white/60 max-w-sm mt-1 leading-relaxed">
+                        <p className="text-[15px] text-slate-800/75 dark:text-sky-100/75 max-w-sm mt-1 leading-relaxed">
                           Converse livremente ou peça qualquer ajuste para a nota{' '}
                           <strong className="text-slate-950 dark:text-white">
                             “
@@ -3168,10 +3154,10 @@ export default function App() {
                               enabled={preferences.cursorGlowEnabled}
                               radius={180}
                               className={cn(
-                                'max-w-[82%] sm:max-w-[75%] rounded-2xl px-4 py-3 text-[14px] leading-relaxed select-text shadow-sm',
+                                'max-w-[82%] sm:max-w-[75%] rounded-2xl px-4 py-3 text-[15.5px] leading-relaxed select-text shadow-[0_8px_24px_rgba(0,0,0,0.05),inset_0_1px_1px_rgba(255,255,255,0.6)] backdrop-blur-xl',
                                 isOnda
-                                  ? 'rounded-bl-xs bg-white/60 dark:bg-slate-950/60 border border-white/85 dark:border-white/30 text-slate-950 dark:text-white backdrop-blur-xl'
-                                  : 'rounded-br-xs bg-slate-900/90 dark:bg-white/90 border border-slate-900 dark:border-white text-white dark:text-slate-950 font-medium'
+                                  ? 'rounded-bl-xs bg-white/26 dark:bg-white/[0.10] border border-white/65 dark:border-white/28 text-slate-950 dark:text-white'
+                                  : 'rounded-br-xs bg-white/42 dark:bg-sky-200/20 border border-white/80 dark:border-sky-200/45 text-slate-950 dark:text-white font-medium'
                               )}
                             >
                               <p className="whitespace-pre-wrap">{msg.text}</p>
@@ -3183,7 +3169,7 @@ export default function App() {
                                     msg.writeToNoteLines.length > 0) ||
                                   (msg.smartTableData &&
                                     msg.smartTableData.length > 0)) && (
-                                  <div className="mt-2.5 pt-2 border-t border-slate-900/10 dark:border-white/15 flex flex-wrap items-center gap-1.5">
+                                  <div className="mt-2.5 pt-2 border-t border-slate-900/10 dark:border-white/20 flex flex-wrap items-center gap-1.5">
                                     {(msg.replaceEntireNoteContent ||
                                       msg.updatedNoteTitle) && (
                                       <button
@@ -3199,7 +3185,7 @@ export default function App() {
                                       >
                                         {wasNoteApplied ? (
                                           <>
-                                            <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                                            <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-300" />
                                             <span>Nota atualizada!</span>
                                           </>
                                         ) : (
@@ -3225,7 +3211,7 @@ export default function App() {
                                         >
                                           {wasInserted ? (
                                             <>
-                                              <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                                              <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-300" />
                                               <span>Adicionado à nota!</span>
                                             </>
                                           ) : (
@@ -3254,7 +3240,7 @@ export default function App() {
                                         >
                                           {wasTableInserted ? (
                                             <>
-                                              <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                                              <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-300" />
                                               <span>Tabela inserida!</span>
                                             </>
                                           ) : (
@@ -3281,7 +3267,7 @@ export default function App() {
                         <div className="shrink-0 mb-1">
                           <OndaWaveOIcon className="h-7 w-auto" />
                         </div>
-                        <div className="rounded-2xl rounded-bl-xs bg-white/60 dark:bg-slate-950/60 border border-white/85 dark:border-white/30 px-4 py-3 backdrop-blur-xl">
+                        <div className="rounded-2xl rounded-bl-xs bg-white/65 dark:bg-[#0d2d6b]/65 border border-white/85 dark:border-sky-200/35 px-4 py-3 backdrop-blur-xl">
                           <div className="inline-flex items-center gap-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-slate-800 dark:bg-white animate-bounce" />
                             <span className="w-1.5 h-1.5 rounded-full bg-slate-800 dark:bg-white animate-bounce [animation-delay:120ms]" />
@@ -3292,30 +3278,247 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* Barra de envio de mensagem no Chat (com brilho no cursor) */}
-                  <form onSubmit={handleSendToOnda} className="shrink-0 pt-2">
-                    <CursorGlowSurface
-                      enabled={preferences.cursorGlowEnabled}
-                      radius={180}
-                      className="flex items-center gap-2 pl-4 pr-2 py-2 rounded-2xl bg-white/50 dark:bg-white/[0.11] border border-white/85 dark:border-white/30 backdrop-blur-2xl shadow-[0_8px_24px_rgba(0,0,0,0.06)]"
-                    >
-                      <input
-                        type="text"
-                        value={ondaInput}
-                        onChange={(e) => setOndaInput(e.target.value)}
-                        placeholder="Converse com o Onda ou peça um ajuste na nota..."
-                        className="flex-1 bg-transparent text-[14px] font-medium text-slate-950 dark:text-white placeholder:text-slate-700/65 dark:placeholder:text-white/50 focus:outline-none"
-                      />
-                      <button
-                        type="submit"
-                        disabled={!ondaInput.trim() || isOndaThinking}
-                        className="h-9 px-4 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-950 text-[12.5px] font-bold inline-flex items-center gap-1.5 disabled:opacity-40 hover:opacity-90 transition-all cursor-pointer disabled:cursor-not-allowed shrink-0"
+                  {/* JANELA SOBREPOSTA DE PERGUNTAS (ESTILO CLAUDE CODE) NO CENTRO DO CHAT */}
+                  <AnimatePresence>
+                    {activeQuestionSession && (
+                      <motion.div
+                        key="claude-code-questions-overlay"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.22 }}
+                        className="absolute inset-0 z-30 flex items-center justify-center p-3 sm:p-6 bg-white/25 dark:bg-[#06183d]/45 backdrop-blur-md rounded-2xl"
                       >
-                        <Send className="w-3.5 h-3.5" />
-                        <span>Enviar</span>
-                      </button>
-                    </CursorGlowSurface>
-                  </form>
+                        {(() => {
+                          const totalQ = activeQuestionSession.questions.length;
+                          const qIdx = Math.min(
+                            activeQuestionSession.currentIndex,
+                            totalQ - 1
+                          );
+                          const currentQ = activeQuestionSession.questions[qIdx];
+                          const selectedForQ =
+                            activeQuestionSession.selectedOptions[currentQ.id] || [];
+                          const customForQ =
+                            activeQuestionSession.customInputs[currentQ.id] || '';
+                          const hasAnsweredCurrent =
+                            selectedForQ.length > 0 || customForQ.trim().length > 0;
+                          const isLastQ = qIdx === totalQ - 1;
+
+                          return (
+                            <motion.div
+                              key={currentQ.id}
+                              initial={{ opacity: 0, scale: 0.94, y: 10 }}
+                              animate={{ opacity: 1, scale: 1, y: 0 }}
+                              exit={{ opacity: 0, scale: 0.94, y: -10 }}
+                              transition={{
+                                type: 'spring',
+                                stiffness: 260,
+                                damping: 24,
+                              }}
+                              className="w-full max-w-lg rounded-3xl bg-white/80 dark:bg-[#0d2b66]/85 border border-white/90 dark:border-sky-200/40 backdrop-blur-2xl shadow-[0_24px_60px_rgba(4,15,45,0.28),inset_0_1px_1px_rgba(255,255,255,0.75)] p-5 sm:p-6 flex flex-col gap-4"
+                            >
+                              {/* Cabeçalho da Janela de Perguntas */}
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-2.5">
+                                  <OndaWaveOIcon className="h-6 w-auto" />
+                                  <span className="text-[12px] font-bold tracking-wide uppercase text-slate-700 dark:text-sky-200">
+                                    Pergunta {qIdx + 1} de {totalQ}
+                                  </span>
+                                </div>
+
+                                {/* Pílulas de etapas clicáveis */}
+                                <div className="flex items-center gap-1.5">
+                                  {activeQuestionSession.questions.map((qItem, i) => {
+                                    const isDone =
+                                      (activeQuestionSession.selectedOptions[qItem.id]
+                                        ?.length || 0) > 0 ||
+                                      Boolean(
+                                        activeQuestionSession.customInputs[
+                                          qItem.id
+                                        ]?.trim()
+                                      );
+                                    const isCurrent = i === qIdx;
+                                    return (
+                                      <button
+                                        key={qItem.id}
+                                        type="button"
+                                        onClick={() => handleStepQuestionSession(i)}
+                                        className={cn(
+                                          'h-2 rounded-full transition-all cursor-pointer',
+                                          isCurrent
+                                            ? 'w-6 bg-blue-600 dark:bg-sky-300'
+                                            : isDone
+                                            ? 'w-2.5 bg-blue-400/75 dark:bg-sky-400/70'
+                                            : 'w-2 bg-slate-400/40 dark:bg-white/25'
+                                        )}
+                                        title={`Pergunta ${i + 1}`}
+                                      />
+                                    );
+                                  })}
+                                </div>
+                              </div>
+
+                              {/* Pergunta Atual */}
+                              <div>
+                                <h4 className="text-[16.5px] sm:text-[18px] font-bold text-slate-950 dark:text-white leading-snug">
+                                  {currentQ.question}
+                                </h4>
+                                <p className="text-[12px] text-slate-700/80 dark:text-sky-100/75 mt-1">
+                                  {currentQ.allowMultiple
+                                    ? 'Você pode marcar uma ou mais opções abaixo:'
+                                    : 'Escolha uma opção abaixo (ou escreva a sua):'}
+                                </p>
+                              </div>
+
+                              {/* Lista de Opções estilo Claude Code */}
+                              <div className="space-y-2 max-h-[240px] overflow-y-auto pr-0.5 [&::-webkit-scrollbar]:hidden">
+                                {currentQ.options.map((opt, optIdx) => {
+                                  const isSelected = selectedForQ.includes(opt);
+                                  return (
+                                    <CursorGlowSurface
+                                      key={opt}
+                                      as="button"
+                                      type="button"
+                                      enabled={preferences.cursorGlowEnabled}
+                                      radius={160}
+                                      onClick={() =>
+                                        handleToggleQuestionOption(
+                                          currentQ.id,
+                                          opt,
+                                          currentQ.allowMultiple
+                                        )
+                                      }
+                                      className={cn(
+                                        'w-full flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl text-left text-[13.5px] font-semibold transition-all cursor-pointer border',
+                                        isSelected
+                                          ? 'bg-blue-600/15 dark:bg-sky-400/25 border-blue-600/60 dark:border-sky-300 text-slate-950 dark:text-white shadow-xs'
+                                          : 'bg-white/55 dark:bg-white/[0.08] hover:bg-white/80 dark:hover:bg-white/[0.15] border-white/80 dark:border-white/20 text-slate-900 dark:text-white/90'
+                                      )}
+                                    >
+                                      <div className="flex items-center gap-2.5 min-w-0">
+                                        <span
+                                          className={cn(
+                                            'w-5 h-5 rounded-lg text-[11.5px] font-bold flex items-center justify-center shrink-0 transition-colors',
+                                            isSelected
+                                              ? 'bg-blue-600 dark:bg-sky-300 text-white dark:text-[#07193e]'
+                                              : 'bg-slate-900/10 dark:bg-white/15 text-slate-800 dark:text-white/80'
+                                          )}
+                                        >
+                                          {optIdx + 1}
+                                        </span>
+                                        <span className="truncate">{opt}</span>
+                                      </div>
+                                      <div
+                                        className={cn(
+                                          'w-4.5 h-4.5 rounded-full flex items-center justify-center border shrink-0 transition-all',
+                                          isSelected
+                                            ? 'bg-blue-600 dark:bg-sky-300 border-blue-600 dark:border-sky-300 text-white dark:text-[#07193e]'
+                                            : 'border-slate-400/70 dark:border-white/35'
+                                        )}
+                                      >
+                                        {isSelected && (
+                                          <Check className="w-3 h-3 stroke-[3]" />
+                                        )}
+                                      </div>
+                                    </CursorGlowSurface>
+                                  );
+                                })}
+
+                                {/* Campo livre "Outro / digitar resposta..." */}
+                                <div className="pt-1">
+                                  <input
+                                    type="text"
+                                    value={customForQ}
+                                    onChange={(e) =>
+                                      handleQuestionCustomInput(
+                                        currentQ.id,
+                                        e.target.value
+                                      )
+                                    }
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter' && hasAnsweredCurrent) {
+                                        e.preventDefault();
+                                        if (isLastQ) {
+                                          void handleSubmitQuestionWindow();
+                                        } else {
+                                          handleStepQuestionSession(qIdx + 1);
+                                        }
+                                      }
+                                    }}
+                                    placeholder="Outro (ou digite um detalhe específico)..."
+                                    className="w-full px-4 py-2.5 rounded-2xl bg-white/50 dark:bg-white/[0.07] border border-white/80 dark:border-white/20 text-[13px] font-medium text-slate-950 dark:text-white placeholder:text-slate-600/70 dark:placeholder:text-sky-100/50 focus:outline-none focus:bg-white/80 dark:focus:bg-white/[0.14] transition-all"
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Rodapé de Navegação da Janela */}
+                              <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-900/10 dark:border-white/15">
+                                {qIdx > 0 ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStepQuestionSession(qIdx - 1)}
+                                    className="px-4 py-2 rounded-xl bg-white/55 dark:bg-white/10 hover:bg-white/80 dark:hover:bg-white/20 border border-white/80 dark:border-white/20 text-[12.5px] font-bold text-slate-900 dark:text-white transition-all cursor-pointer"
+                                  >
+                                    Voltar
+                                  </button>
+                                ) : (
+                                  <div />
+                                )}
+
+                                {isLastQ ? (
+                                  <button
+                                    type="button"
+                                    disabled={!hasAnsweredCurrent}
+                                    onClick={() => void handleSubmitQuestionWindow()}
+                                    className="px-5 py-2 rounded-xl bg-blue-600 dark:bg-sky-300 text-white dark:text-[#07193e] text-[13px] font-bold inline-flex items-center gap-1.5 shadow-sm hover:opacity-95 disabled:opacity-40 transition-all cursor-pointer disabled:cursor-not-allowed"
+                                  >
+                                    <Check className="w-4 h-4 stroke-[2.5]" />
+                                    <span>Concluir e Enviar</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    disabled={!hasAnsweredCurrent}
+                                    onClick={() => handleStepQuestionSession(qIdx + 1)}
+                                    className="px-5 py-2 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-[#07193e] text-[13px] font-bold inline-flex items-center gap-1.5 shadow-sm hover:opacity-90 disabled:opacity-40 transition-all cursor-pointer disabled:cursor-not-allowed"
+                                  >
+                                    <span>Próxima</span>
+                                  </button>
+                                )}
+                              </div>
+                            </motion.div>
+                          );
+                        })()}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* Barra de envio padrão (some quando a janela de perguntas está aberta e volta ao responder) */}
+                  {!activeQuestionSession && (
+                    <form onSubmit={handleSendToOnda} className="shrink-0 pt-2">
+                      <CursorGlowSurface
+                        enabled={preferences.cursorGlowEnabled}
+                        radius={180}
+                        className="flex items-center gap-2 pl-4 pr-2 py-2 rounded-2xl bg-white/24 dark:bg-white/[0.10] border border-white/65 dark:border-white/28 backdrop-blur-2xl shadow-[0_8px_24px_rgba(0,0,0,0.06),inset_0_1px_1px_rgba(255,255,255,0.65)]"
+                      >
+                        <input
+                          type="text"
+                          value={ondaInput}
+                          onChange={(e) => setOndaInput(e.target.value)}
+                          placeholder="Converse com o Onda ou peça um ajuste na nota..."
+                          className="flex-1 bg-transparent text-[14px] font-medium text-slate-950 dark:text-white placeholder:text-slate-700/65 dark:placeholder:text-sky-100/60 focus:outline-none"
+                        />
+                        <button
+                          type="submit"
+                          disabled={!ondaInput.trim() || isOndaThinking}
+                          className="h-9 px-4 rounded-xl bg-white/45 dark:bg-white/20 hover:bg-white/65 dark:hover:bg-white/30 border border-white/75 dark:border-white/35 text-slate-950 dark:text-white text-[12.5px] font-bold inline-flex items-center gap-1.5 disabled:opacity-40 transition-all cursor-pointer disabled:cursor-not-allowed shrink-0 shadow-2xs"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          <span>Enviar</span>
+                        </button>
+                      </CursorGlowSurface>
+                    </form>
+                  )}
                 </div>
               )}
             </div>

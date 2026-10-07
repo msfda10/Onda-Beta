@@ -1,3 +1,10 @@
+export interface OndaClarifyingQuestion {
+  id: string;
+  question: string;
+  options: string[];
+  allowMultiple?: boolean;
+}
+
 export interface OndaConversationMessage {
   id: string;
   sender: 'onda' | 'user';
@@ -10,6 +17,7 @@ export interface OndaConversationMessage {
   writeToNoteLines?: string[];
   smartTableLabel?: string;
   smartTableData?: string[][];
+  clarifyingQuestions?: OndaClarifyingQuestion[];
   polishedLines?: string[];
   ghostContinuation?: string;
   createdAt: string;
@@ -25,6 +33,7 @@ export interface OndaFriendResponse {
   writeToNoteLines?: string[];
   smartTableLabel?: string;
   smartTableData?: string[][];
+  clarifyingQuestions?: OndaClarifyingQuestion[];
   polishedLines?: string[];
   ghostContinuation?: string;
   autoWriteNow?: boolean;
@@ -282,147 +291,8 @@ export function extractNoteMetrics(
   };
 }
 
-function buildNaturalConversationalReply(params: {
-  userName?: string;
-  noteTitle: string;
-  noteContent: string;
-  userMessage?: string;
-  conversationHistory?: Array<{ sender: 'onda' | 'user'; text: string }>;
-}): OndaFriendResponse {
-  const firstName = params.userName ? params.userName.split(' ')[0] : '';
-  const userText = (params.userMessage || '').trim();
-  const lower = userText.toLowerCase();
-  const hasNoteTitle =
-    Boolean(params.noteTitle.trim()) && params.noteTitle.trim() !== 'Nova Nota';
-  const noteName = hasNoteTitle ? params.noteTitle.trim() : '';
-
-  const rawLines = params.noteContent
-    .split('\n')
-    .filter((l) => !l.startsWith('[[TABLE]]:'))
-    .map((l) => l.replace(/^(##\s+|###\s+|>\s+|[☐☑•\-*]\s+|\d+\.\s+)/, '').trim())
-    .filter(Boolean);
-
-  // 1. Saudações e início de conversa ("olá", "oi", "bom dia", "boa tarde", "boa noite", "opa", "e aí")
-  if (
-    /^(ol[aá]|oi+|opa|e\s*a[ií]|hey|bom\s+dia|boa\s+tarde|boa\s+noite|tudo\s+bem|como\s+vai)[!?.]*$/i.test(
-      lower
-    )
-  ) {
-    if (/tudo\s+bem|como\s+vai/i.test(lower)) {
-      return {
-        message: `Tudo ótimo por aqui${firstName ? `, ${firstName}` : ''}! E com você? Como posso te ajudar hoje?`,
-        mood: 'acolhedor',
-      };
-    }
-    return {
-      message: `Olá${firstName ? `, ${firstName}` : ''}! Tudo bem? No que posso te ajudar agora?`,
-      mood: 'acolhedor',
-    };
-  }
-
-  // 2. Perguntas sobre como o chat / Onda funciona
-  if (
-    /quem\s+[eé]\s+voc[eê]|o\s+que\s+voc[eê]\s+faz|como\s+voc[eê]\s+funciona|pode\s+me\s+ajudar/i.test(
-      lower
-    )
-  ) {
-    return {
-      message: `Claro${firstName ? `, ${firstName}` : ''}! Podemos conversar sobre qualquer ideia, planejar tarefas ou, se você quiser, posso escrever, organizar ou montar checklists e tabelas direto na sua nota${noteName ? ` "${noteName}"` : ''}. O que você está pensando em fazer?`,
-      mood: 'parceiro',
-    };
-  }
-
-  // 3. Pedido explícito de tabela
-  const wantsTable = /\b(tabela|planilha|quadro|colunas|cronograma\s+em\s+tabela)\b/i.test(
-    lower
-  );
-  if (wantsTable) {
-    const subject = noteName || 'Planejamento';
-    const tableData: string[][] = /rotina|hor[aá]rio|dia|semana/i.test(
-      `${lower} ${subject}`
-    )
-      ? [
-          ['Período / Horário', 'Atividade', 'Prioridade'],
-          ['Manhã (08:00)', 'Foco principal do dia', 'Alta'],
-          ['Tarde (14:00)', 'Execução e demandas', 'Média'],
-          ['Noite (19:00)', 'Revisão e descanso', 'Normal'],
-        ]
-      : [
-          ['Item', 'Detalhe', 'Status'],
-          ['1. Planejamento', `Definir escopo de ${subject}`, 'Em andamento'],
-          ['2. Execução', 'Desenvolver atividades principais', 'Pendente'],
-          ['3. Revisão', 'Validar entrega final', 'Pendente'],
-        ];
-
-    return {
-      message: `Perfeito${firstName ? `, ${firstName}` : ''}! Preparei uma tabela estruturada para ${noteName ? `"${noteName}"` : 'sua nota'}. Você pode clicar abaixo para inserir direto na folha ou me dizer se quer mudar alguma coluna.`,
-      mood: 'parceiro',
-      smartTableLabel: 'Inserir tabela na nota',
-      smartTableData: tableData,
-    };
-  }
-
-  // 4. Pedido explícito para criar/organizar/escrever/ajustar a nota ou montar rotina/checklist
-  const wantsNoteAction =
-    /\b(organiz|ajust|melhor|corrig|reescrev|resum|estrutur|format|adicione|adicionar|escrev|crie|criar|monta|monte|coloca|coloque|insira|inserir|fa[cç]a\s+uma?\s+(?:lista|rotina|checklist|resumo))\b/i.test(
-      lower
-    );
-
-  if (wantsNoteAction) {
-    const topic = noteName || 'Minha Nota';
-    const polished = rawLines.map((l) => autoPolishLineText(l));
-    const isRoutine = /rotina|dia|manh[aã]|tarde|noite|hábito|habito/i.test(
-      `${lower} ${topic}`
-    );
-
-    const newNoteContent =
-      polished.length > 0
-        ? [
-            `## ${autoPolishLineText(topic)}`,
-            ...polished.map((l) => `☐ ${l}`),
-          ].join('\n')
-        : isRoutine
-        ? [
-            `## Manhã`,
-            `☐ Organizar as prioridades do dia`,
-            `☐ Bloco de foco principal`,
-            `## Tarde`,
-            `☐ Resolver pendências e entregas`,
-            `☐ Pausa rápida e revisão`,
-            `## Noite`,
-            `☐ Planejar o dia seguinte e descansar`,
-          ].join('\n')
-        : [
-            `## ${autoPolishLineText(topic)}`,
-            `☐ Definir objetivo principal`,
-            `☐ Executar próximos passos`,
-            `☐ Revisar resultados`,
-          ].join('\n');
-
-    return {
-      message: `Pronto${firstName ? `, ${firstName}` : ''}! Já estruturei e atualizei a nota ${noteName ? `"${noteName}"` : ''} com base no que você pediu. Me avise se quiser acrescentar ou mudar algum ponto!`,
-      mood: 'parceiro',
-      replaceEntireNoteContent: newNoteContent,
-      autoApplyToNote: true,
-    };
-  }
-
-  // 5. Conversa livre / troca de ideias (sem automação forçada nem botões intrusivos)
-  if (lower.endsWith('?')) {
-    return {
-      message: `Boa pergunta${firstName ? `, ${firstName}` : ''}! Para ${noteName ? `"${noteName}"` : 'isso'}, o melhor caminho é dividir em partes simples e focar no que traz mais resultado primeiro. Quer que a gente estruture ideias sobre isso juntos ou prefere que eu anote os pontos principais na folha?`,
-      mood: 'pensativo',
-    };
-  }
-
-  return {
-    message: `Entendi${firstName ? `, ${firstName}` : ''}! Me conta mais sobre como você quer conduzir ${noteName ? `"${noteName}"` : 'isso'} — podemos ir conversando para amadurecer a ideia ou, quando quiser, você me pede e eu anoto ou organizo tudo lá na nota.`,
-    mood: 'parceiro',
-  };
-}
-
 /**
- * Conversa com o "Onda" no Chat — conversa fluida e natural, ajustando a nota somente quando pedido
+ * Conversa com o "Onda" no Chat — sem respostas prontas ou padronizadas
  */
 export async function talkToOndaFriend(params: {
   userName?: string;
@@ -439,12 +309,8 @@ export async function talkToOndaFriend(params: {
       body: JSON.stringify(params),
     });
 
-    if (!res.ok) {
-      return buildNaturalConversationalReply(params);
-    }
-
-    const data = await res.json();
-    if (data && typeof data.message === 'string' && data.message.trim()) {
+    const data = await res.json().catch(() => null);
+    if (res.ok && data && typeof data.message === 'string' && data.message.trim()) {
       let parsedTable: string[][] | undefined;
       if (typeof data.smartTableJson === 'string' && data.smartTableJson.trim()) {
         try {
@@ -462,6 +328,33 @@ export async function talkToOndaFriend(params: {
           // ignora JSON inválido de tabela
         }
       }
+
+      const parsedQuestions: OndaClarifyingQuestion[] | undefined = Array.isArray(
+        data.clarifyingQuestions
+      )
+        ? data.clarifyingQuestions
+            .filter(
+              (q: unknown): q is Record<string, unknown> =>
+                Boolean(q) &&
+                typeof q === 'object' &&
+                typeof (q as Record<string, unknown>).question === 'string' &&
+                Array.isArray((q as Record<string, unknown>).options) &&
+                ((q as Record<string, unknown>).options as unknown[]).length >= 2
+            )
+            .map((q: Record<string, unknown>, idx: number): OndaClarifyingQuestion => ({
+              id:
+                typeof q.id === 'string' && q.id.trim()
+                  ? q.id.trim()
+                  : `q_${idx + 1}`,
+              question: String(q.question).trim(),
+              options: (q.options as unknown[])
+                .map((opt) => String(opt ?? '').trim())
+                .filter(Boolean)
+                .slice(0, 5),
+              allowMultiple: Boolean(q.allowMultiple),
+            }))
+            .filter((q: OndaClarifyingQuestion) => Boolean(q.question) && q.options.length >= 2)
+        : undefined;
 
       return {
         message: data.message.trim(),
@@ -496,11 +389,27 @@ export async function talkToOndaFriend(params: {
             ? 'Inserir tabela na nota'
             : undefined,
         smartTableData: parsedTable,
+        clarifyingQuestions:
+          parsedQuestions && parsedQuestions.length > 0
+            ? parsedQuestions
+            : undefined,
       };
     }
 
-    return buildNaturalConversationalReply(params);
+    const errorDetail =
+      data && typeof data.error === 'string' && data.error.trim()
+        ? data.error.trim()
+        : 'Não foi possível conectar à IA no momento. Verifique se a chave GEMINI_API_KEY está ativa.';
+
+    return {
+      message: errorDetail,
+      mood: 'calmo',
+    };
   } catch {
-    return buildNaturalConversationalReply(params);
+    return {
+      message:
+        'Não foi possível conectar ao servidor da IA no momento. Tente novamente em instantes.',
+      mood: 'calmo',
+    };
   }
 }

@@ -73,24 +73,25 @@ export const handler = async (event) => {
 
   const firstName = userName ? userName.split(' ')[0] : '';
 
-  const systemInstruction = `Você é o **Onda**, um parceiro de conversa inteligente, natural e prestativo dentro do caderno de notas de ${
+  const systemInstruction = `Você é o Onda, um parceiro inteligente, humano e direto no caderno de notas de ${
     firstName || 'quem está conversando com você'
   }.
 
-REGRAS ESSENCIAIS DE CONVERSA NATURAL:
-1. **Converse com naturalidade, sem respostas robotizadas ou automáticas**:
-   - Se o usuário apenas cumprimentar ("Olá", "Oi", "Tudo bem?", "Bom dia"), puxar assunto, tirar uma dúvida ou trocar ideias, responda de forma humana, fluida e natural, como em uma conversa real.
-   - **NÃO** empurre botões, **NÃO** altere a nota e **NÃO** preencha "replaceEntireNoteContent", "writeToNoteLines" nem "smartTableJson" se o usuário estiver apenas conversando ou cumprimentando! Deixe esses campos vazios/omitidos até que façam sentido no que o usuário pedir.
-2. **Ajude na nota à medida que o usuário pedir**:
-   - Você conhece o título atual ("${noteTitle || 'Sem título'}") e o conteúdo da nota aberta.
-   - Somente quando o usuário pedir para escrever, adicionar, organizar, ajustar, resumir, criar uma rotina/lista/tabela ou alterar algo na nota:
-     • Preencha "replaceEntireNoteContent" com o conteúdo atualizado da nota (usando "## " para título de seção, "### " para subtítulo, "☐ " para checklist pendente, "☑ " para concluído, "• " para tópicos, "1. " para lista numerada, "> " para citação, ou "[[TABLE]]:[[...]]" em linha única para tabela) e defina "autoApplyToNote": true para aplicar direto na nota, OU
-     • Preencha "writeToNoteLines" / "smartTableJson" se quiser oferecer blocos específicos para ele inserir.`;
+COMO VOCÊ DEVE AGIR:
+1. **Conversa livre e sem frases prontas**:
+   - Converse naturalmente em português do Brasil, sem clichês robóticos.
+   - Em cumprimentos, bate-papo ou pedidos diretos/específicos, responda direto sem abrir janela de perguntas ("clarifyingQuestions" deve ficar vazio/omitido).
+2. **Janela de Perguntas (estilo Claude Code) — SOMENTE quando realmente necessário**:
+   - Se o usuário fizer um pedido amplo que precise de alinhamento antes de estruturar a nota (ex.: "Quero organizar todas as áreas da minha vida", "Me ajuda a montar uma rotina", "Quero planejar um projeto/estudos/viagem") E ainda não tiver respondido às perguntas de alinhamento:
+     • Preencha "clarifyingQuestions" com 2 a 4 perguntas curtas, práticas e diretas, cada uma com 3 a 4 opções clicáveis ("options") e defina "allowMultiple": true se fizer sentido marcar mais de uma opção.
+     • Nesse momento, envie apenas uma "message" curta introduzindo as perguntas e NÃO altere a nota ainda.
+3. **Quando o usuário responder à janela de perguntas ou fizer um pedido claro de escrita/organização na nota**:
+   - Estruture tudo de forma impecável na nota preenchendo "replaceEntireNoteContent" (usando "## " para título de seção, "### " para subtítulo, "☐ " para checklist, "• " para tópicos, "1. " para lista numerada ou "[[TABLE]]:[[...]]" em linha única para tabela), defina "autoApplyToNote": true e, se a nota ainda estiver sem título, sugira "updatedNoteTitle".`;
 
   const historyText =
     Array.isArray(conversationHistory) && conversationHistory.length > 0
       ? `Histórico da conversa:\n${conversationHistory
-          .slice(-10)
+          .slice(-12)
           .map(
             (m) =>
               `${m.sender === 'user' ? firstName || 'Usuário' : 'Onda'}: ${m.text}`
@@ -99,21 +100,16 @@ REGRAS ESSENCIAIS DE CONVERSA NATURAL:
       : '';
 
   const prompt = [
-    firstName ? `Nome do usuário: ${firstName}` : '',
-    noteTitle ? `Título da nota aberta: "${noteTitle}"` : 'Nota aberta ainda sem título.',
-    noteContent
-      ? `Conteúdo atual da nota aberta:\n"""\n${noteContent}\n"""`
-      : 'O corpo da nota está em branco no momento.',
-    otherNotesSummary
-      ? `Resumo de outras notas do usuário (contexto):\n${otherNotesSummary}`
-      : '',
+    noteTitle ? `Título da nota: "${noteTitle}"` : 'Nota ainda sem título.',
+    noteContent ? `Conteúdo da nota:\n"""\n${noteContent}\n"""` : 'Nota em branco.',
+    otherNotesSummary ? `Outras notas:\n${otherNotesSummary}` : '',
     historyText,
-    `Mensagem atual do usuário: "${userMessage}"\nResponda naturalmente à mensagem dele(a). Só preencha campos de edição da nota se ele(a) tiver pedido para escrever, organizar ou ajustar algo na nota.`,
+    `Mensagem do usuário: "${userMessage}"`,
   ]
     .filter(Boolean)
     .join('\n\n');
 
-  const models = ['gemini-3.8-flash', 'gemini-flash-latest'];
+  const models = ['gemini-flash-latest', 'gemini-3.8-flash'];
 
   for (const modelName of models) {
     try {
@@ -134,6 +130,22 @@ REGRAS ESSENCIAIS DE CONVERSA NATURAL:
               mood: {
                 type: Type.STRING,
                 description: 'O tom da resposta: "acolhedor", "animado", "pensativo", "parceiro" ou "calmo".',
+              },
+              clarifyingQuestions: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    id: { type: Type.STRING },
+                    question: { type: Type.STRING },
+                    options: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING },
+                    },
+                    allowMultiple: { type: Type.BOOLEAN },
+                  },
+                  required: ['id', 'question', 'options'],
+                },
               },
               writeToNoteLabel: {
                 type: Type.STRING,

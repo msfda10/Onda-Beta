@@ -7,6 +7,17 @@
 }
 
 @layer base {
+  html, body {
+    color-scheme: light dark;
+    background-color: #f1f3f4;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    html, body {
+      background-color: #202124;
+    }
+  }
+
   html, body, #root {
     height: 100%;
     margin: 0;
