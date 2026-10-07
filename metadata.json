@@ -1,0 +1,11 @@
+{
+  "name": "Onda",
+  "description": "Organizador pessoal minimalista com sincronização em nuvem.",
+  "requestFramePermissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

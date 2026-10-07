@@ -1,0 +1,81 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global safety net: default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function isValidUserProfile(data) {
+      return (!('name' in data) || (data.name is string && data.name.size() <= 120))
+        && (!('email' in data) || (data.email is string && data.email.size() <= 200))
+        && (!('role' in data) || (data.role is string && data.role.size() <= 120))
+        && (!('avatarColor' in data) || (data.avatarColor is string && data.avatarColor.size() <= 160))
+        && (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 350000));
+    }
+
+    function isValidCategory(data, userId) {
+      return data.userId == userId
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 100
+        && data.kind in ['tasks', 'notes', 'checklist', 'habits', 'goals']
+        && data.icon is string && data.icon.size() <= 40;
+    }
+
+    function isValidBoardItem(data, userId) {
+      return data.userId == userId
+        && data.categoryId is string && data.categoryId.size() >= 1 && data.categoryId.size() <= 128
+        && data.title is string && data.title.size() <= 500
+        && (!('content' in data) || (data.content is string && data.content.size() <= 10000))
+        && data.itemType in ['task', 'note', 'checklist', 'habit', 'goal']
+        && data.completed is bool
+        && (!('progress' in data) || (data.progress is number && data.progress >= 0 && data.progress <= 100))
+        && (!('habitDays' in data) || (data.habitDays is list && data.habitDays.size() <= 14));
+    }
+
+    function isValidChatSession(data, userId) {
+      return data.userId == userId
+        && data.title is string && data.title.size() <= 120
+        && data.messages is list && data.messages.size() <= 500;
+    }
+
+    match /users/{userId} {
+      allow get, list: if isOwner(userId);
+      allow create, update: if isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming());
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      match /categories/{categoryId} {
+        allow get, list: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidId(categoryId) && isValidCategory(incoming(), userId);
+        allow delete: if isOwner(userId) && isValidId(categoryId);
+      }
+
+      match /items/{itemId} {
+        allow get, list: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidId(itemId) && isValidBoardItem(incoming(), userId);
+        allow delete: if isOwner(userId) && isValidId(itemId);
+      }
+
+      match /chats/{chatId} {
+        allow get, list: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidId(chatId) && isValidChatSession(incoming(), userId);
+        allow delete: if isOwner(userId) && isValidId(chatId);
+      }
+    }
+  }
+}

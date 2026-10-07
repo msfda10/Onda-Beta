@@ -1,0 +1,104 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Perfil do usuário autenticado no sistema Onda",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "ID único do usuário"
+        },
+        "name": {
+          "type": "string",
+          "description": "Nome completo do usuário"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "E-mail do usuário"
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "URL da foto de perfil do Google"
+        },
+        "role": {
+          "type": "string",
+          "description": "Cargo ou função"
+        },
+        "avatarColor": {
+          "type": "string",
+          "description": "Estilo de cor selecionada para o avatar do usuário"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Data de criação"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Data da última atualização"
+        }
+      },
+      "required": ["id", "name", "email"]
+    },
+    "BoardItem": {
+      "title": "BoardItem",
+      "description": "Nota sincronizada no sistema de notas Onda",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "ID único da nota"
+        },
+        "userId": {
+          "type": "string",
+          "description": "ID do usuário proprietário"
+        },
+        "categoryId": {
+          "type": "string",
+          "description": "Identificador da coleção de notas"
+        },
+        "title": {
+          "type": "string",
+          "description": "Título da nota"
+        },
+        "content": {
+          "type": "string",
+          "description": "Conteúdo estruturado da nota"
+        },
+        "itemType": {
+          "type": "string",
+          "enum": ["task", "note", "checklist", "habit", "goal"],
+          "description": "Tipo do registro (note)"
+        },
+        "completed": {
+          "type": "boolean",
+          "description": "Indica se a nota está fixada (pinned)"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Data de criação"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Data da última edição"
+        }
+      },
+      "required": ["id", "userId", "categoryId", "title", "itemType", "completed"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Documentos de perfis de usuário"
+    },
+    "/users/{userId}/items/{itemId}": {
+      "schema": "BoardItem",
+      "description": "Notas sincronizadas do usuário"
+    }
+  }
+}

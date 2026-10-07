@@ -1,0 +1,107 @@
+<svg viewBox="0 0 512 426" width="512" height="426" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Gradiente 2.5D de profundidade interna (tubo da onda) -->
+    <linearGradient id="onda-deep" x1="106" y1="94" x2="405" y2="362" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0B2A6E" />
+      <stop offset="55%" stop-color="#1E40AF" />
+      <stop offset="100%" stop-color="#1D4ED8" />
+    </linearGradient>
+
+    <!-- Gradiente 2.5D do corpo principal da onda (volume líquido luminoso) -->
+    <linearGradient id="onda-body" x1="76" y1="119" x2="443" y2="384" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#60A5FA" />
+      <stop offset="40%" stop-color="#3B82F6" />
+      <stop offset="80%" stop-color="#2563EB" />
+      <stop offset="100%" stop-color="#1E3A8A" />
+    </linearGradient>
+
+    <!-- Gradiente 2.5D da dobra frontal iluminada -->
+    <linearGradient id="onda-fold" x1="128" y1="187" x2="375" y2="392" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#93C5FD" stop-opacity="0.95" />
+      <stop offset="50%" stop-color="#38BDF8" stop-opacity="0.75" />
+      <stop offset="100%" stop-color="#2563EB" stop-opacity="0" />
+    </linearGradient>
+
+    <!-- Gradiente 2.5D perolado da crista de espuma superior -->
+    <linearGradient id="onda-foam" x1="51" y1="42" x2="409" y2="264" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="45%" stop-color="#E0F2FE" />
+      <stop offset="85%" stop-color="#7DD3FC" />
+      <stop offset="100%" stop-color="#38BDF8" />
+    </linearGradient>
+
+    <!-- Sombra volumétrica suave da crista sobre o corpo -->
+    <linearGradient id="onda-foam-shade" x1="153" y1="59" x2="426" y2="273" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#BAE6FD" />
+      <stop offset="60%" stop-color="#7DD3FC" />
+      <stop offset="100%" stop-color="#0284C7" stop-opacity="0.55" />
+    </linearGradient>
+  </defs>
+
+  <g transform="scale(4.2666)">
+    <!-- 1. Camada traseira de sombra volumétrica (interior côncavo da onda) -->
+    <path
+      d="M32 33C36 26 46 25 53 31C58 35 61 42 68 41C74 40 78 34 85 38C92 42 97 52 104 65L28 66C35 54 38 42 32 33Z"
+      fill="url(#onda-deep)"
+    />
+
+    <!-- 2. Corpo principal 2.5D da onda com curvatura escultural -->
+    <path
+      d="M14 87C26 75 36 59 38 42C41 39 46 44 50 46C56 48 60 40 65 42C70 44 71 51 77 50C82 49 85 45 90 48C96 52 102 64 115 86C106 83 99 80 93 84C89 87 91 91 86 92C79 93 75 83 66 83C58 83 55 92 49 92C44 92 44 85 36 84C28 83 22 88 14 87Z"
+      fill="url(#onda-body)"
+    />
+
+    <!-- 3. Dobra líquida frontal translúcida (volume 2.5D) -->
+    <path
+      d="M22 85C33 74 41 60 45 46C51 52 59 55 67 51C62 64 55 76 46 85C38 83 30 85 22 85Z"
+      fill="url(#onda-fold)"
+    />
+    <path
+      d="M62 84C70 74 76 62 79 50C85 54 90 59 95 66C91 75 86 83 80 88C74 84 68 83 62 84Z"
+      fill="url(#onda-fold)"
+      opacity="0.7"
+    />
+
+    <!-- 4. Sombra interna sob a espuma para destacar a crista em relevo -->
+    <path
+      d="M36 13C53 12 60 22 71 25C79 27 84 22 90 27C96 32 95 42 99 50C102 56 105 62 107 68C96 57 83 47 70 42C62 39 56 41 50 36C44 31 46 22 39 19C33 16 32 15 36 13Z"
+      fill="url(#onda-foam-shade)"
+    />
+
+    <!-- 5. Crista principal de espuma 2.5D curvando para a esquerda com volume perolado -->
+    <path
+      d="M14 40C10 23 26 9 47 11C61 12 66 23 74 25C81 26 84 22 90 27C95 31 94 41 98 49C101 56 105 62 106 68C87 51 64 38 39 33C31 32 27 38 24 43C21 48 16 46 14 40Z"
+      fill="url(#onda-foam)"
+    />
+
+    <!-- 6. Gotas 2.5D com volume esférico sob a crista -->
+    <path
+      d="M27 37C25 43 23 50 25 55C27 59 31 57 31 52C31 47 29 41 27 37Z"
+      fill="url(#onda-foam)"
+    />
+    <circle cx="20.5" cy="49.5" r="3.2" fill="url(#onda-foam)" />
+
+    <!-- 7. Linhas de brilho especular (efeito vidro / luz de borda 2.5D) -->
+    <path
+      d="M18 34C18 22 28 14 43 14"
+      stroke="#FFFFFF"
+      stroke-width="2.8"
+      stroke-linecap="round"
+      opacity="0.95"
+    />
+    <path
+      d="M38 42C36 56 28 71 18 83"
+      stroke="#BAE6FD"
+      stroke-width="2"
+      stroke-linecap="round"
+      opacity="0.75"
+    />
+    <path
+      d="M95 54C99 63 105 73 112 82"
+      stroke="#BAE6FD"
+      stroke-width="2"
+      stroke-linecap="round"
+      opacity="0.7"
+    />
+  </g>
+</svg>
