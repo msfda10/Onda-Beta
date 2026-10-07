@@ -102,6 +102,59 @@ export interface NoteBlock {
 
 let cachedTransparentFullLogo: string | null = null;
 let cachedTransparentWaveO: string | null = null;
+let cachedSquareFavicon: string | null = null;
+
+function applyOndaFaviconFromTransparentUrl(transparentUrl: string) {
+  if (typeof document === 'undefined') return;
+  if (cachedSquareFavicon) {
+    const link = document.querySelector<HTMLLinkElement>("link[rel*='icon']");
+    if (link) {
+      link.type = 'image/png';
+      link.href = cachedSquareFavicon;
+    }
+    return;
+  }
+
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    try {
+      const size = 128;
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const scale = Math.min((size * 0.9) / img.width, (size * 0.9) / img.height);
+      const drawW = img.width * scale;
+      const drawH = img.height * scale;
+      const drawX = (size - drawW) / 2;
+      const drawY = (size - drawH) / 2;
+
+      ctx.drawImage(img, drawX, drawY, drawW, drawH);
+      const squarePng = canvas.toDataURL('image/png');
+      cachedSquareFavicon = squarePng;
+
+      let link = document.querySelector<HTMLLinkElement>("link[rel*='icon']");
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        document.head.appendChild(link);
+      }
+      link.type = 'image/png';
+      link.href = squarePng;
+
+      const appleLink = document.getElementById('onda-apple-icon') as HTMLLinkElement | null;
+      if (appleLink) {
+        appleLink.href = squarePng;
+      }
+    } catch {
+      // fallback mantém o SVG estático
+    }
+  };
+  img.src = transparentUrl;
+}
 
 function processBlackBgImage(
   src: string,
@@ -229,12 +282,21 @@ function OndaLogo3D({ className = 'h-9 sm:h-10 w-auto' }: { className?: string }
   useEffect(() => {
     if (cachedTransparentFullLogo) {
       setLogoUrl(cachedTransparentFullLogo);
-      return;
+    } else {
+      processBlackBgImage(ondaFullLogoSrc, 640, 320, (url) => {
+        cachedTransparentFullLogo = url;
+        setLogoUrl(url);
+      });
     }
-    processBlackBgImage(ondaFullLogoSrc, 640, 320, (url) => {
-      cachedTransparentFullLogo = url;
-      setLogoUrl(url);
-    });
+
+    if (cachedTransparentWaveO) {
+      applyOndaFaviconFromTransparentUrl(cachedTransparentWaveO);
+    } else {
+      processBlackBgImage(ondaWaveOLogoSrc, 384, 384, (url) => {
+        cachedTransparentWaveO = url;
+        applyOndaFaviconFromTransparentUrl(url);
+      });
+    }
   }, []);
 
   if (!logoUrl) {
@@ -258,11 +320,13 @@ function OndaWaveOIcon({ className = 'h-9 sm:h-10 w-auto' }: { className?: strin
   useEffect(() => {
     if (cachedTransparentWaveO) {
       setIconUrl(cachedTransparentWaveO);
+      applyOndaFaviconFromTransparentUrl(cachedTransparentWaveO);
       return;
     }
     processBlackBgImage(ondaWaveOLogoSrc, 384, 384, (url) => {
       cachedTransparentWaveO = url;
       setIconUrl(url);
+      applyOndaFaviconFromTransparentUrl(url);
     });
   }, []);
 
