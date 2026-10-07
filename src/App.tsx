@@ -106,6 +106,9 @@ let cachedSquareFavicon: string | null = null;
 
 function applyOndaFaviconFromTransparentUrl(transparentUrl: string) {
   if (typeof document === 'undefined') return;
+  // Oculta o segundo "Onda" em texto na aba do navegador para exibir somente a logo
+  document.title = '\u2060';
+
   if (cachedSquareFavicon) {
     const link = document.querySelector<HTMLLinkElement>("link[rel*='icon']");
     if (link) {
@@ -126,7 +129,7 @@ function applyOndaFaviconFromTransparentUrl(transparentUrl: string) {
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      const scale = Math.min((size * 0.9) / img.width, (size * 0.9) / img.height);
+      const scale = Math.min((size * 0.98) / img.width, (size * 0.98) / img.height);
       const drawW = img.width * scale;
       const drawH = img.height * scale;
       const drawX = (size - drawW) / 2;
@@ -150,7 +153,7 @@ function applyOndaFaviconFromTransparentUrl(transparentUrl: string) {
         appleLink.href = squarePng;
       }
     } catch {
-      // fallback mantém o SVG estático
+      // ignora erro de canvas
     }
   };
   img.src = transparentUrl;
@@ -282,21 +285,14 @@ function OndaLogo3D({ className = 'h-9 sm:h-10 w-auto' }: { className?: string }
   useEffect(() => {
     if (cachedTransparentFullLogo) {
       setLogoUrl(cachedTransparentFullLogo);
-    } else {
-      processBlackBgImage(ondaFullLogoSrc, 640, 320, (url) => {
-        cachedTransparentFullLogo = url;
-        setLogoUrl(url);
-      });
+      applyOndaFaviconFromTransparentUrl(cachedTransparentFullLogo);
+      return;
     }
-
-    if (cachedTransparentWaveO) {
-      applyOndaFaviconFromTransparentUrl(cachedTransparentWaveO);
-    } else {
-      processBlackBgImage(ondaWaveOLogoSrc, 384, 384, (url) => {
-        cachedTransparentWaveO = url;
-        applyOndaFaviconFromTransparentUrl(url);
-      });
-    }
+    processBlackBgImage(ondaFullLogoSrc, 640, 320, (url) => {
+      cachedTransparentFullLogo = url;
+      setLogoUrl(url);
+      applyOndaFaviconFromTransparentUrl(url);
+    });
   }, []);
 
   if (!logoUrl) {
@@ -320,13 +316,11 @@ function OndaWaveOIcon({ className = 'h-9 sm:h-10 w-auto' }: { className?: strin
   useEffect(() => {
     if (cachedTransparentWaveO) {
       setIconUrl(cachedTransparentWaveO);
-      applyOndaFaviconFromTransparentUrl(cachedTransparentWaveO);
       return;
     }
     processBlackBgImage(ondaWaveOLogoSrc, 384, 384, (url) => {
       cachedTransparentWaveO = url;
       setIconUrl(url);
-      applyOndaFaviconFromTransparentUrl(url);
     });
   }, []);
 
